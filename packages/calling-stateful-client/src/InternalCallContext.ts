@@ -11,9 +11,8 @@ import { LocalVideoStreamState } from './CallClientState';
 import type { CallContext } from './CallContext';
 import { CallIdHistory } from './CallIdHistory';
 
-/* @conditional-compile-remove(video-background-effects) */
 import { LocalVideoStreamVideoEffectsSubscriber } from './LocalVideoStreamVideoEffectsSubscriber';
-/* @conditional-compile-remove(video-background-effects) */
+
 import { Features } from '@azure/communication-calling';
 
 /**
@@ -46,6 +45,12 @@ export type LocalRenderInfo = RenderInfo<LocalVideoStream>;
  */
 export type RemoteRenderInfo = RenderInfo<RemoteVideoStream>;
 
+/* @conditional-compile-remove(together-mode) */
+/**
+ * Internally used to keep track of the status, renderer, and awaiting promise, associated with a CallFeatureVideoStream.
+ */
+export type CallFeatureRenderInfo = RenderInfo<RemoteVideoStream>;
+
 /**
  * Contains internal data used between different Declarative components to share data.
  */
@@ -56,13 +61,17 @@ export class InternalCallContext {
   // <CallId, <MediaStreamType, LocalRenderInfo>>.
   private _localRenderInfos = new Map<string, Map<MediaStreamType, LocalRenderInfo>>();
 
+  /* @conditional-compile-remove(together-mode) */
+  // <CallId, <featureName, <MediaStreamType, CallFeatureRenderInfo>>>.
+  private _callFeatureRenderInfos = new Map<string, Map<string, Map<MediaStreamType, CallFeatureRenderInfo>>>();
+
   // Used for keeping track of rendered LocalVideoStreams that are not part of a Call.
   private _unparentedRenderInfos = new Map<MediaStreamType, LocalRenderInfo>();
   private _callIdHistory = new CallIdHistory();
 
   // Used for keeping track of video effects subscribers that are not part of a Call.
   // The key is the stream ID. We assume each stream ID
-  /* @conditional-compile-remove(video-background-effects) */
+
   private _unparentedViewVideoEffectsSubscriber = new Map<string, LocalVideoStreamVideoEffectsSubscriber | undefined>();
 
   public setCallId(newCallId: string, oldCallId: string): void {
@@ -77,6 +86,13 @@ export class InternalCallContext {
     if (localRenderInfos) {
       this._localRenderInfos.delete(oldCallId);
       this._localRenderInfos.set(newCallId, localRenderInfos);
+    }
+    /* @conditional-compile-remove(together-mode) */
+    const callFeatureRenderInfos = this._callFeatureRenderInfos.get(oldCallId);
+    /* @conditional-compile-remove(together-mode) */
+    if (callFeatureRenderInfos) {
+      this._callFeatureRenderInfos.delete(oldCallId);
+      this._callFeatureRenderInfos.set(newCallId, callFeatureRenderInfos);
     }
   }
 
@@ -197,14 +213,12 @@ export class InternalCallContext {
   }
 
   public deleteUnparentedRenderInfo(localVideoStream: LocalVideoStreamState): void {
-    /* @conditional-compile-remove(video-background-effects) */
     this._unparentedViewVideoEffectsSubscriber.get(localVideoStream.mediaStreamType)?.unsubscribe();
 
     this._unparentedRenderInfos.delete(localVideoStream.mediaStreamType);
   }
 
   public subscribeToUnparentedViewVideoEffects(localVideoStream: LocalVideoStream, callContext: CallContext): void {
-    /* @conditional-compile-remove(video-background-effects) */
     {
       // Ensure we aren't setting multiple subscriptions
       this._unparentedViewVideoEffectsSubscriber.get(localVideoStream.mediaStreamType)?.unsubscribe();
@@ -224,5 +238,63 @@ export class InternalCallContext {
   public clearCallRelatedState(): void {
     this._remoteRenderInfos.clear();
     this._localRenderInfos.clear();
+    /* @conditional-compile-remove(together-mode) */
+    this._callFeatureRenderInfos.clear();
+  }
+
+  /* @conditional-compile-remove(together-mode) */
+  public getCallFeatureRenderInfosForCall(
+    callId: string
+  ): Map<string, Map<MediaStreamType, CallFeatureRenderInfo>> | undefined {
+    return this._callFeatureRenderInfos.get(this._callIdHistory.latestCallId(callId));
+  }
+
+  /* @conditional-compile-remove(together-mode) */
+  public getCallFeatureRenderInfo(
+    callId: string,
+    featureNameKey: string,
+    streamKey: MediaStreamType
+  ): CallFeatureRenderInfo | undefined {
+    const callFeatureRenderInfosForCall = this._callFeatureRenderInfos
+      .get(this._callIdHistory.latestCallId(callId))
+      ?.get(featureNameKey)
+      ?.get(streamKey);
+    if (!callFeatureRenderInfosForCall) {
+      return undefined;
+    }
+    return callFeatureRenderInfosForCall;
+  }
+
+  /* @conditional-compile-remove(together-mode) */
+  public setCallFeatureRenderInfo(
+    callId: string,
+    featureNameKey: string,
+    streamKey: MediaStreamType,
+    stream: RemoteVideoStream,
+    status: RenderStatus,
+    renderer: VideoStreamRenderer | undefined
+  ): void {
+    let callRenderInfos = this._callFeatureRenderInfos.get(this._callIdHistory.latestCallId(callId));
+    if (!callRenderInfos) {
+      callRenderInfos = new Map<string, Map<MediaStreamType, CallFeatureRenderInfo>>();
+      // If the callId is not found, create a new map for the callId.
+      this._callFeatureRenderInfos.set(this._callIdHistory.latestCallId(callId), callRenderInfos);
+    }
+    let featureRenderInfos = callRenderInfos.get(featureNameKey);
+    if (!featureRenderInfos) {
+      featureRenderInfos = new Map<MediaStreamType, CallFeatureRenderInfo>();
+      callRenderInfos.set(featureNameKey, featureRenderInfos);
+    }
+    featureRenderInfos.set(streamKey, { stream, status, renderer });
+  }
+
+  /* @conditional-compile-remove(together-mode) */
+  public deleteCallFeatureRenderInfo(callId: string, featureName: string, streamKey: MediaStreamType): void {
+    const callFeatureRenderInfoForCall = this._callFeatureRenderInfos.get(this._callIdHistory.latestCallId(callId));
+    if (!callFeatureRenderInfoForCall || !callFeatureRenderInfoForCall.get(featureName)) {
+      return;
+    }
+
+    callFeatureRenderInfoForCall.get(featureName)?.delete(streamKey);
   }
 }

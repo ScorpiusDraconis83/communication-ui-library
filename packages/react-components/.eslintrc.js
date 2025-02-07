@@ -31,6 +31,7 @@ module.exports = {
       }
     ],
     eqeqeq: 'warn',
+    '@typescript-eslint/no-non-null-assertion': 'error',
     'header/header': ['error', 'line', ' Copyright (c) Microsoft Corporation.\n Licensed under the MIT License.'],
     'react/display-name': 'off',
     '@typescript-eslint/no-explicit-any': 'error',
@@ -89,6 +90,18 @@ module.exports = {
       },
       env: {
         jest: true
+      }
+    },
+    {
+      // disable no-restricted-imports for playwright tests
+      files: [
+        './tests/browser/**/*.spec.ts',
+        './tests/browser/**/*.spec.tsx',
+        './tests/browser/**/*.tsx',
+        './playwright/index.tsx'
+      ],
+      rules: {
+        'no-restricted-imports': 'off'
       }
     }
   ]

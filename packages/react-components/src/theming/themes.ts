@@ -1,7 +1,7 @@
 // Copyright (c) Microsoft Corporation.
 // Licensed under the MIT License.
 
-import { PartialTheme } from '@fluentui/react';
+import { createTheme, PartialTheme } from '@fluentui/react';
 
 /**
  * Custom Fluent theme palette used by calling related components in this library.
@@ -14,28 +14,8 @@ export interface CallingTheme {
     callRedDark: string;
     callRedDarker: string;
     iconWhite: string;
-    /* @conditional-compile-remove(raise-hand) */
     raiseHandGold: string;
-  };
-}
-
-/**
- * Custom Fluent theme palette used by chat related components in this library.
- *
- * @public
- */
-export interface ChatTheme {
-  /**
-   * Custom Fluent theme palette used by chat related components in this library.
-   *
-   * @public
-   */
-  chatPalette: {
-    imageGalleryOverlayBlack: string;
-    imageGalleryTitleWhite: string;
-    imageGalleryDefaultButtonBackground: string;
-    imageGalleryButtonBackgroundHover: string;
-    imageGalleryButtonBackgroundActive: string;
+    videoTileLabelBackgroundLight: string;
   };
 }
 
@@ -44,7 +24,7 @@ export interface ChatTheme {
  *
  * @public
  */
-export const lightTheme: PartialTheme & CallingTheme & ChatTheme = {
+export const lightTheme: PartialTheme & CallingTheme = {
   palette: {
     themePrimary: '#0078d4',
     themeLighterAlt: '#eff6fc',
@@ -75,28 +55,15 @@ export const lightTheme: PartialTheme & CallingTheme & ChatTheme = {
     callRedDark: '#8b2c3d',
     callRedDarker: '#772a38',
     iconWhite: '#ffffff',
-    /* @conditional-compile-remove(raise-hand) */
-    raiseHandGold: '#eaa300'
-  },
-
-  chatPalette: {
-    imageGalleryOverlayBlack: '#000000',
-    imageGalleryTitleWhite: '#ffffff',
-    imageGalleryDefaultButtonBackground: '#1b1a19',
-    imageGalleryButtonBackgroundHover: '#252423',
-    imageGalleryButtonBackgroundActive: '#292827'
+    raiseHandGold: '#eaa300',
+    videoTileLabelBackgroundLight: 'rgba(255,255,255,0.8)'
   },
   semanticColors: {
     errorText: '#a80000'
   }
 };
 
-/**
- * Preset dark theme for components exported from this library.
- *
- * @public
- */
-export const darkTheme: PartialTheme & CallingTheme & ChatTheme = {
+const partialDarkTheme: PartialTheme = {
   palette: {
     themePrimary: '#2899f5',
     themeLighterAlt: '#02060a',
@@ -122,22 +89,41 @@ export const darkTheme: PartialTheme & CallingTheme & ChatTheme = {
     white: '#252423',
     whiteTranslucent40: 'rgba(0, 0, 0, 0.4)'
   },
+  semanticColors: {
+    errorText: '#f1707b'
+  }
+};
+
+/**
+ * Preset dark theme for components exported from this library.
+ *
+ * @public
+ */
+export const darkTheme: PartialTheme & CallingTheme = {
+  ...createTheme({
+    ...partialDarkTheme,
+    isInverted: true
+  }),
   callingPalette: {
     callRed: '#c4314b',
     callRedDark: '#a42e43',
     callRedDarker: '#8b2c3d',
     iconWhite: '#ffffff',
-    /* @conditional-compile-remove(raise-hand) */
-    raiseHandGold: '#eaa300'
-  },
-  chatPalette: {
-    imageGalleryOverlayBlack: '#000000',
-    imageGalleryTitleWhite: '#ffffff',
-    imageGalleryDefaultButtonBackground: '#1b1a19',
-    imageGalleryButtonBackgroundHover: '#252423',
-    imageGalleryButtonBackgroundActive: '#292827'
-  },
+    raiseHandGold: '#eaa300',
+    videoTileLabelBackgroundLight: 'rgba(37,36,35,0.8)'
+  }
+};
+
+/* @conditional-compile-remove(image-overlay-theme) */
+/**
+ * Preset dark theme for the ImageOverlay component.
+ *
+ * @public
+ */
+export const imageOverlayTheme: PartialTheme = {
+  palette: darkTheme.palette,
   semanticColors: {
-    errorText: '#f1707b'
+    ...darkTheme.semanticColors,
+    bodyBackground: 'rgba(0, 0, 0, 0.85)'
   }
 };

@@ -1,14 +1,16 @@
 // Copyright (c) Microsoft Corporation.
 // Licensed under the MIT License.
 
-import React, { useCallback, useEffect, useMemo } from 'react';
+import React, { createRef, useCallback, useEffect, useMemo } from 'react';
 import { SidePaneRenderer, useIsParticularSidePaneOpen } from './SidePaneProvider';
 import { SidePaneHeader } from '../../../common/SidePaneHeader';
-/* @conditional-compile-remove(video-background-effects) */
+
 import { useLocale } from '../../../localization';
 import { VideoEffectsPaneContent } from '../../../common/VideoEffectsPane';
 import { ActiveErrorMessage } from '@internal/react-components';
 import { IButton } from '@fluentui/react';
+import { useSelector } from '../../hooks/useSelector';
+import { getVideoBackgroundImages } from '../../selectors/baseSelectors';
 
 /** @private */
 export const VIDEO_EFFECTS_SIDE_PANE_ID = 'videoeffects';
@@ -34,16 +36,13 @@ export const useVideoEffectsPane = (
     cameraButtonRef?.current?.focus();
   }, [cameraButtonRef, updateSidePaneRenderer]);
 
-  /* @conditional-compile-remove(video-background-effects) */
   const locale = useLocale();
 
   const onRenderHeader = useCallback(() => {
     return (
       <SidePaneHeader
         onClose={closePane}
-        /* @conditional-compile-remove(video-background-effects) */
         headingText={locale.strings.call.videoEffectsPaneTitle}
-        /* @conditional-compile-remove(video-background-effects) */
         dismissSidePaneButtonAriaLabel={
           locale.strings.call.dismissSidePaneButtonLabel ??
           locale.strings.callWithChat.dismissSidePaneButtonLabel ??
@@ -52,29 +51,28 @@ export const useVideoEffectsPane = (
         mobileView={mobileView}
       />
     );
-  }, [closePane, /* @conditional-compile-remove(video-background-effects) */ locale.strings, mobileView]);
+  }, [closePane, locale.strings, mobileView]);
 
-  /* @conditional-compile-remove(video-background-effects) */
   const latestVideoEffectError = latestErrors.find((error) => error.type === 'unableToStartVideoEffect');
+  const updateFocusHandle = useMemo(() => createRef<{ focus: () => void }>(), []);
+
+  const backgroundImages = useSelector(getVideoBackgroundImages);
 
   const onRenderContent = useCallback((): JSX.Element => {
     return (
       <VideoEffectsPaneContent
         onDismissError={onDismissError}
-        /* @conditional-compile-remove(video-background-effects) */
         activeVideoEffectError={latestVideoEffectError}
         activeVideoEffectChange={() => {
           // Clear any existing video effects error when the user clicks on a new video effect
-          /* @conditional-compile-remove(video-background-effects) */
+
           latestVideoEffectError && onDismissError?.(latestVideoEffectError);
         }}
+        updateFocusHandle={updateFocusHandle}
+        backgroundImages={backgroundImages}
       />
     );
-  }, [
-    /* @conditional-compile-remove(video-background-effects) */
-    latestVideoEffectError,
-    onDismissError
-  ]);
+  }, [latestVideoEffectError, onDismissError, updateFocusHandle, backgroundImages]);
 
   const sidePaneRenderer: SidePaneRenderer = useMemo(
     () => ({
@@ -87,7 +85,10 @@ export const useVideoEffectsPane = (
 
   const openPane = useCallback(() => {
     updateSidePaneRenderer(sidePaneRenderer);
-  }, [sidePaneRenderer, updateSidePaneRenderer]);
+
+    // Run in a setTimeout as it must be called only once the imperative handle is available
+    setTimeout(() => updateFocusHandle.current?.focus(), 0);
+  }, [sidePaneRenderer, updateSidePaneRenderer, updateFocusHandle]);
 
   const isOpen = useIsParticularSidePaneOpen(VIDEO_EFFECTS_SIDE_PANE_ID);
 

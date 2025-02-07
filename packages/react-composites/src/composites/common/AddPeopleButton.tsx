@@ -3,9 +3,9 @@
 
 import { concatStyleSets, DefaultButton, IButtonStyles, PrimaryButton, Stack, useTheme } from '@fluentui/react';
 import copy from 'copy-to-clipboard';
-import React, { useCallback, useMemo, useState } from 'react';
+import React, { useCallback, useMemo, useRef, useState } from 'react';
 import { CallWithChatCompositeStrings } from '../../index-public';
-/* @conditional-compile-remove(one-to-n-calling) @conditional-compile-remove(PSTN-calls) */
+
 import { CallCompositeStrings } from '../../index-public';
 import { CallWithChatCompositeIcon } from './icons';
 import { peoplePaneContainerTokens } from './styles/ParticipantContainer.styles';
@@ -16,23 +16,19 @@ import {
   linkIconStyles,
   themedCopyLinkButtonStyles
 } from './styles/PeoplePaneContent.styles';
-/* @conditional-compile-remove(PSTN-calls) */
 import { AddPeopleDropdown } from './AddPeopleDropdown';
-/* @conditional-compile-remove(PSTN-calls) */
 import { PhoneNumberIdentifier } from '@azure/communication-common';
-/* @conditional-compile-remove(PSTN-calls) */
 import { AddPhoneNumberOptions } from '@azure/communication-calling';
 import { Announcer } from '@internal/react-components';
+import { useId } from '@fluentui/react-hooks';
+import { CalloutWithIcon } from './CalloutWithIcon';
 
 /** @private */
 export interface AddPeopleButtonProps {
   inviteLink?: string;
   mobileView?: boolean;
   participantList?: JSX.Element;
-  strings:
-    | CallWithChatCompositeStrings
-    | /* @conditional-compile-remove(one-to-n-calling) @conditional-compile-remove(PSTN-calls) */ CallCompositeStrings;
-  /* @conditional-compile-remove(PSTN-calls) */
+  strings: CallWithChatCompositeStrings | CallCompositeStrings;
   onAddParticipant: (participant: PhoneNumberIdentifier, options?: AddPhoneNumberOptions) => void;
   alternateCallerId?: string;
 }
@@ -63,15 +59,30 @@ export const AddPeopleButton = (props: AddPeopleButtonProps): JSX.Element => {
     }, 3000);
   }, [strings.copyInviteLinkActionedAriaLabel]);
 
-  /* @conditional-compile-remove(PSTN-calls) */
+  const dateInviteLinkCopied = useRef<number | undefined>(undefined);
+  const [inviteLinkCopiedRecently, setInviteLinkCopiedRecently] = useState(false);
+  const onCopyInviteLink = useCallback(() => {
+    setInviteLinkCopiedRecently(true);
+    dateInviteLinkCopied.current = Date.now();
+    setTimeout(() => {
+      if (dateInviteLinkCopied.current && Date.now() - dateInviteLinkCopied.current >= 2000) {
+        setInviteLinkCopiedRecently(false);
+      }
+    }, 2000);
+  }, [setInviteLinkCopiedRecently, dateInviteLinkCopied]);
+
+  const calloutButtonId = useId('callout-button');
+
   if (mobileView) {
     return (
       <AddPeopleDropdown
-        strings={strings}
+        strings={{ ...strings }}
         mobileView={mobileView}
         inviteLink={inviteLink}
         onAddParticipant={props.onAddParticipant}
         alternateCallerId={props.alternateCallerId}
+        onCopyInviteLink={onCopyInviteLink}
+        inviteLinkCopiedRecently={inviteLinkCopiedRecently}
       />
     );
   } else {
@@ -83,6 +94,8 @@ export const AddPeopleButton = (props: AddPeopleButtonProps): JSX.Element => {
           inviteLink={inviteLink}
           onAddParticipant={props.onAddParticipant}
           alternateCallerId={props.alternateCallerId}
+          onCopyInviteLink={onCopyInviteLink}
+          inviteLinkCopiedRecently={inviteLinkCopiedRecently}
         />
         <Stack.Item grow styles={{ root: { overflowY: 'hidden' } }}>
           {participantList}
@@ -98,14 +111,23 @@ export const AddPeopleButton = (props: AddPeopleButtonProps): JSX.Element => {
           <Stack.Item styles={copyLinkButtonContainerStyles}>
             <Announcer announcementString={copyInviteLinkAnnouncerStrings} ariaLive={'polite'} />
             <PrimaryButton
+              id={calloutButtonId}
               onClick={() => {
                 copy(inviteLink ?? '');
                 toggleAnnouncerString();
+                onCopyInviteLink();
               }}
               styles={copyLinkButtonStylesThemed}
               onRenderIcon={() => <CallWithChatCompositeIcon iconName="Link" style={linkIconStyles} />}
               text={strings.copyInviteLinkButtonLabel}
             />
+            {inviteLinkCopiedRecently && (
+              <CalloutWithIcon
+                targetId={calloutButtonId}
+                text={strings.copyInviteLinkButtonActionedLabel}
+                doNotLayer={true}
+              />
+            )}
           </Stack.Item>
         )}
       </Stack>
@@ -117,14 +139,19 @@ export const AddPeopleButton = (props: AddPeopleButtonProps): JSX.Element => {
           <Stack styles={copyLinkButtonStackStyles}>
             <Announcer announcementString={copyInviteLinkAnnouncerStrings} ariaLive={'polite'} />
             <DefaultButton
+              id={calloutButtonId}
               text={strings.copyInviteLinkButtonLabel}
               onRenderIcon={() => <CallWithChatCompositeIcon iconName="Link" style={linkIconStyles} />}
               onClick={() => {
                 copy(inviteLink ?? '');
                 toggleAnnouncerString();
+                onCopyInviteLink();
               }}
               styles={copyLinkButtonStylesThemed}
             />
+            {inviteLinkCopiedRecently && (
+              <CalloutWithIcon targetId={calloutButtonId} text={strings.copyInviteLinkButtonActionedLabel} />
+            )}
           </Stack>
         )}
         <Stack.Item grow styles={{ root: { overflowY: 'hidden' } }}>

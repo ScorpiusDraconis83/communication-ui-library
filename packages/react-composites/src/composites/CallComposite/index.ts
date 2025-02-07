@@ -2,14 +2,12 @@
 // Licensed under the MIT License.
 
 export { CallComposite } from './CallComposite';
-export type { CallCompositeOptions, CallCompositeProps } from './CallComposite';
+export type { CallCompositeOptions, CallCompositeProps, RemoteVideoTileMenuOptions } from './CallComposite';
 /* @conditional-compile-remove(call-readiness) */
 export type { DeviceCheckOptions } from './CallComposite';
-/* @conditional-compile-remove(pinned-participants) */
-export type { RemoteVideoTileMenuOptions } from './CallComposite';
-/* @conditional-compile-remove(click-to-call) */
 export type { LocalVideoTileOptions } from './CallComposite';
 export type { CallControlOptions } from './types/CallControlOptions';
+export type { DtmfDialPadOptions } from './CallComposite';
 
 export * from './Strings';
 
@@ -19,31 +17,31 @@ export {
   useAzureCommunicationCallAdapter
 } from './adapter';
 
-/* @conditional-compile-remove(teams-identity-support) */
 export { createTeamsCallAdapter, createTeamsCallAdapterFromClient, useTeamsCallAdapter } from './adapter';
 
 export type { TeamsAdapterOptions } from './adapter';
 
-/* @conditional-compile-remove(teams-identity-support) */
-export type { TeamsCallAdapter, TeamsCallAdapterArgs, Profile, OnFetchProfileCallback } from './adapter';
+export type { TeamsCallAdapterArgsCommon, TeamsCallAdapter, TeamsCallAdapterArgs } from './adapter';
+/* @conditional-compile-remove(teams-identity-support-beta) */
+export type { TeamsOutboundCallAdapterArgs, StartTeamsCallIdentifier } from './adapter';
+
+export type { Profile, OnFetchProfileCallback } from './adapter';
 
 export type {
   AzureCommunicationCallAdapterArgs,
   CallAdapterLocator,
   CommonCallAdapter,
-  CallAdapterCallOperations
+  CallAdapterCallOperations,
+  AzureCommunicationOutboundCallAdapterArgs
 } from './adapter';
 
-/* @conditional-compile-remove(video-background-effects) */
 export type { AzureCommunicationCallAdapterOptions } from './adapter';
 
-/* @conditional-compile-remove(video-background-effects) */
 export type { CommonCallAdapterOptions } from './adapter';
 
-/* @conditional-compile-remove(teams-adhoc-call) */
+/* @conditional-compile-remove(call-participants-locator) */
 export type { CallParticipantsLocator } from './adapter';
 
-/* @conditional-compile-remove(video-background-effects) */
 export type {
   VideoBackgroundImage,
   VideoBackgroundEffect,
@@ -73,10 +71,12 @@ export type {
   NetworkDiagnosticChangedEvent,
   ParticipantsJoinedListener,
   ParticipantsLeftListener,
-  JoinCallOptions
+  JoinCallOptions,
+  StartCallIdentifier,
+  StartCaptionsAdapterOptions,
+  StopCaptionsAdapterOptions
 } from './adapter';
 
-/* @conditional-compile-remove(close-captions) */
 export type {
   CaptionsReceivedListener,
   IsCaptionsActiveChangedListener,
@@ -84,13 +84,17 @@ export type {
   IsSpokenLanguageChangedListener
 } from './adapter';
 
-/* @conditional-compile-remove(call-transfer) */
-export type { TransferRequestedListener } from './adapter';
+/* @conditional-compile-remove(rtt) */
+export type { RealTimeTextReceivedListener } from './adapter';
 
-/* @conditional-compile-remove(capabilities) */
+export type { TransferAcceptedListener } from './adapter';
+
 export type { CapabilitiesChangedListener } from './adapter';
-/* @conditional-compile-remove(capabilities) */
+
 export type { CapabilityChangedNotificationStrings } from './components/CapabilitiesChangedNotificationBar';
 
-/* @conditional-compile-remove(calling-sounds) */
+export type { SpotlightChangedListener } from './adapter';
+
 export type { CallingSounds, SoundEffect } from './adapter';
+
+export type { SpotlightPromptStrings } from './components/Prompt';

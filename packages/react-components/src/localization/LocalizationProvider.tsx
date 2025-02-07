@@ -15,13 +15,14 @@ import {
   ScreenShareButtonStrings,
   SendBoxStrings,
   TypingIndicatorStrings,
-  VideoGalleryStrings
+  VideoGalleryStrings,
+  CaptionsSettingsModalStrings,
+  CaptionsBannerStrings,
+  StartCaptionsButtonStrings
 } from '../components';
-/* @conditional-compile-remove(raise-hand) */
+import { NotificationStackStrings } from '../components';
 import { RaiseHandButtonStrings } from '../components';
-/* @conditional-compile-remove(PSTN-calls) */ /* @conditional-compile-remove(one-to-n-calling) */
 import { HoldButtonStrings } from '../components';
-/* @conditional-compile-remove(dialpad) */ /* @conditional-compile-remove(PSTN-calls) */
 import { DialpadStrings } from '../components';
 /* @conditional-compile-remove(call-readiness) */
 import { SitePermissionsStrings } from '../components/DevicePermissions/SitePermissionsScaffolding';
@@ -31,23 +32,30 @@ import { BrowserPermissionDeniedStrings } from '../components/DevicePermissions/
 import { BrowserPermissionDeniedIOSStrings } from '../components/DevicePermissions/BrowserPermissionDeniedIOS';
 /* @conditional-compile-remove(call-readiness) */ /* @conditional-compile-remove(unsupported-browser) */
 import { UnsupportedBrowserStrings } from '../components/UnsupportedBrowser';
-/* @conditional-compile-remove(one-to-n-calling) */
-// @conditional-compile-remove(PSTN-calls)
 import { VideoTileStrings } from '../components/VideoTile';
 import { COMPONENT_LOCALE_EN_US } from './locales';
 /* @conditional-compile-remove(unsupported-browser) */
 import { UnsupportedBrowserVersionStrings } from '../components/UnsupportedBrowserVersion';
 /* @conditional-compile-remove(unsupported-browser) */
 import { UnsupportedOperatingSystemStrings } from '../components/UnsupportedOperatingSystem';
-/* @conditional-compile-remove(vertical-gallery) */
 import { VerticalGalleryStrings } from '../components/VerticalGallery';
 /* @conditional-compile-remove(total-participant-count) */
 import { ParticipantListStrings } from '../components/ParticipantList';
 /* @conditional-compile-remove(mention) */
 import { MentionPopoverStrings } from '../components/MentionPopover';
-import { ImageGalleryStrings } from '../components/ImageGallery';
-/* @conditional-compile-remove(reaction) */
+import { ImageOverlayStrings } from '../components/ImageOverlay';
 import { ReactionButtonStrings } from '../components';
+/* @conditional-compile-remove(rich-text-editor) */
+import { RichTextSendBoxStrings } from '../components/RichTextEditor/RichTextSendBox';
+import { MeetingConferencePhoneInfoModalStrings } from '../components/MeetingConferencePhoneInfo';
+import { IncomingCallNotificationStrings } from '../components/IncomingCallNotification';
+/* @conditional-compile-remove(rtt) */
+import { RealTimeTextModalStrings } from '../components/RealTimeTextModal';
+/* @conditional-compile-remove(rtt) */
+import { RealTimeTextStrings } from '../components/RealTimeText';
+import { CaptionLanguageStrings, SpokenLanguageStrings } from '../types';
+/* @conditional-compile-remove(rtt) */
+import { StartRealTimeTextButtonStrings } from '../components/StartRealTimeTextButton';
 
 /**
  * Locale information for all components exported from this library.
@@ -87,36 +95,37 @@ export interface ComponentStrings {
   participantsButton: ParticipantsButtonStrings;
   /** Strings for ScreenShareButton */
   screenShareButton: ScreenShareButtonStrings;
-  /* @conditional-compile-remove(raise-hand) */
   /** Strings for RaiseHandButton */
   raiseHandButton: RaiseHandButtonStrings;
-  /* @conditional-compile-remove(reaction) */
-  /** Strings for ReactionButton */
+  /**
+   * Strings for ReactionButton
+   * */
   reactionButton: ReactionButtonStrings;
   /** Strings for TypingIndicator */
   typingIndicator: TypingIndicatorStrings;
   /** Strings for SendBox */
   sendBox: SendBoxStrings;
+  /* @conditional-compile-remove(rich-text-editor) */
+  /** Strings for RichTextSendBox */
+  richTextSendBox: RichTextSendBoxStrings;
   /* @conditional-compile-remove(mention) */
   /** Strings for MentionPopover */
   mentionPopover: MentionPopoverStrings;
-
-  /** Strings for ImageGallery */
-  imageGallery: ImageGalleryStrings;
+  /** Strings for ImageOverlay */
+  imageOverlay: ImageOverlayStrings;
   /** Strings for MessageStatusIndicator */
   messageStatusIndicator: MessageStatusIndicatorStrings;
-  /** Strings for ErroBar */
+  /** Strings for ErrorBar */
   errorBar: ErrorBarStrings;
+
+  /** Strings for NotificationStack */
+  notificationStack: NotificationStackStrings;
   /** Strings for VideoGallery */
   videoGallery: VideoGalleryStrings;
-  /* @conditional-compile-remove(dialpad) */ /* @conditional-compile-remove(PSTN-calls) */
   /** Strings for Dialpad */
   dialpad: DialpadStrings;
-  /* @conditional-compile-remove(one-to-n-calling) */
-  // @conditional-compile-remove(PSTN-calls)
   /** Strings for VideoTile */
   videoTile: VideoTileStrings;
-  /* @conditional-compile-remove(one-to-n-calling) @conditional-compile-remove(PSTN-calls) */
   /** Strings for HoldButton */
   holdButton: HoldButtonStrings;
   /* @conditional-compile-remove(call-readiness) */
@@ -170,7 +179,6 @@ export interface ComponentStrings {
   /* @conditional-compile-remove(call-readiness) */
   /** Strings for BrowserPemissionDeniedIOS */
   BrowserPermissionDeniedIOS: BrowserPermissionDeniedIOSStrings;
-  /* @conditional-compile-remove(vertical-gallery) */
   /**
    * Strings for the VerticalGallery.
    */
@@ -178,9 +186,32 @@ export interface ComponentStrings {
   /* @conditional-compile-remove(total-participant-count) */
   /** Strings for the participant list component */
   ParticipantList: ParticipantListStrings;
-  /* @conditional-compile-remove(hide-attendee-name) */
-  /** Strings for the attendee role */
-  AttendeeRole: string;
+  /** Strings for the MeetingConferencePhoneInfoModal */
+  meetingConferencePhoneInfo: MeetingConferencePhoneInfoModalStrings;
+  IncomingCallNotification: IncomingCallNotificationStrings;
+  /* @conditional-compile-remove(rtt) */
+  /** Strings for the RealTimeTextModal */
+  realTimeTextModal: RealTimeTextModalStrings;
+  /* @conditional-compile-remove(rtt) */
+  /** Strings for RealTimeText */
+  realTimeText: RealTimeTextStrings;
+  /** Strings for Captions Setting Modal */
+  captionsSettingsModal: CaptionsSettingsModalStrings;
+  /**
+   * 1 to 1 mapping between language code and language string for spoken languages
+   */
+  spokenLanguages: SpokenLanguageStrings;
+  /**
+   * 1 to 1 mapping between language code and language string for caption languages
+   */
+  captionLanguages: CaptionLanguageStrings;
+  /** Strings for CaptionsBanner */
+  captionsBanner: CaptionsBannerStrings;
+  /** Strings for Start Captions Button */
+  startCaptionsButton: StartCaptionsButtonStrings;
+  /* @conditional-compile-remove(rtt) */
+  /** Strings for Start RealTimeText Button */
+  startRealTimeTextButton: StartRealTimeTextButtonStrings;
 }
 
 /**

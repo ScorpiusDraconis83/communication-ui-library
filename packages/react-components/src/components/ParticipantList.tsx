@@ -11,11 +11,8 @@ import {
   Stack,
   Theme
 } from '@fluentui/react';
-/* @conditional-compile-remove(total-participant-count) */ /* @conditional-compile-remove(raise-hand) */
 import { Text } from '@fluentui/react';
-/* @conditional-compile-remove(raise-hand) */
 import { useTheme, CallingTheme } from '../theming';
-/* @conditional-compile-remove(raise-hand) */
 import { RaisedHandIcon } from './assets/RaisedHandIcon';
 import React, { useCallback, useMemo } from 'react';
 import { useIdentifiers } from '../identifiers';
@@ -26,9 +23,13 @@ import {
   OnRenderAvatarCallback,
   ParticipantListParticipant
 } from '../types';
-/* @conditional-compile-remove(raise-hand) */
 import { CustomAvatarOptions } from '../types';
-import { ParticipantItem, ParticipantItemStrings, ParticipantItemStyles } from './ParticipantItem';
+import {
+  formatParticipantStateString,
+  ParticipantItem,
+  ParticipantItemStrings,
+  ParticipantItemStyles
+} from './ParticipantItem';
 import { iconStyles, participantListItemStyle, participantListStyle } from './styles/ParticipantList.styles';
 import { _formatString } from '@internal/acs-ui-common';
 
@@ -102,7 +103,8 @@ export type ParticipantListProps = {
   onFetchParticipantMenuItems?: ParticipantMenuItemsCallback;
   /** Optional callback when rendered ParticipantItem is clicked */
   onParticipantClick?: (participant?: ParticipantListParticipant) => void;
-  /** Styles for the {@link ParticipantList} */
+  /** Optional callback to render a context menu to mute a participant */
+  onMuteParticipant?: (userId: string) => Promise<void>;
   styles?: ParticipantListStyles;
   /** Optional value to determine if the tooltip should be shown for participants or not */
   showParticipantOverflowTooltip?: boolean;
@@ -112,8 +114,10 @@ export type ParticipantListProps = {
   /* @conditional-compile-remove(total-participant-count) */
   /** Strings for the participant list */
   strings?: ParticipantListStrings;
-  /** Optional aria-lablledby prop that prefixes each ParticipantItem aria-label */
+  /** Optional aria-labelledby prop that prefixes each ParticipantItem aria-label */
   participantAriaLabelledBy?: string;
+  /** List of pinned participants */
+  pinnedParticipants?: string[];
 };
 
 const onRenderParticipantDefault = (
@@ -127,7 +131,7 @@ const onRenderParticipantDefault = (
   showParticipantOverflowTooltip?: boolean,
   participantAriaLabelledBy?: string,
   theme?: Theme,
-  attendeeRoleString?: string
+  pinnedParticipants?: string[]
 ): JSX.Element | null => {
   const callingParticipant = participant as CallParticipantListParticipant;
 
@@ -138,65 +142,72 @@ const onRenderParticipantDefault = (
 
   const menuItems = createParticipantMenuItems && createParticipantMenuItems(participant);
 
-  let displayName = participant.displayName;
-
-  /* @conditional-compile-remove(hide-attendee-name) */
-  const formatDisplayName = (): string | undefined => {
-    if (displayName && attendeeRoleString) {
-      return _formatString(displayName, { AttendeeRole: attendeeRoleString });
+  const formatDisplayName = (displayName?: string): string | undefined => {
+    if (displayName && strings.attendeeRole) {
+      return _formatString(displayName, { AttendeeRole: strings.attendeeRole });
     }
     return displayName;
   };
-  /* @conditional-compile-remove(hide-attendee-name) */
-  displayName = formatDisplayName();
+  const displayName = formatDisplayName(participant.displayName);
 
-  /* @conditional-compile-remove(raise-hand) */
   const callingPalette = (theme as unknown as CallingTheme).callingPalette;
+  const isPinned = pinnedParticipants && pinnedParticipants?.includes(participant.userId);
+  const isScreenSharing = callingParticipant?.isScreenSharing;
+  const isMuted = callingParticipant?.isMuted;
+  const hasRaisedHand = callingParticipant?.raisedHand;
+  const isAudioPermitted = callingParticipant?.mediaAccess ? callingParticipant.mediaAccess.isAudioPermitted : true;
+  const isVideoPermitted = callingParticipant?.mediaAccess ? callingParticipant.mediaAccess.isVideoPermitted : true;
 
-  const onRenderIcon =
-    callingParticipant?.isScreenSharing ||
-    callingParticipant?.isMuted ||
-    /* @conditional-compile-remove(raise-hand) */ callingParticipant?.raisedHand
-      ? () => (
-          <Stack horizontal={true} tokens={{ childrenGap: '0.5rem' }}>
-            {
-              /* @conditional-compile-remove(raise-hand) */ callingParticipant.raisedHand && (
-                <Stack
-                  horizontal={true}
-                  tokens={{ childrenGap: '0.2rem' }}
-                  style={{
-                    alignItems: 'center',
-                    padding: '0.1rem 0.2rem',
-                    backgroundColor: theme?.palette.neutralLighter,
-                    borderRadius: '0.3rem'
-                  }}
-                >
-                  {callingParticipant.raisedHand.raisedHandOrderPosition && (
-                    <Stack.Item>
-                      <Text>{callingParticipant.raisedHand?.raisedHandOrderPosition}</Text>
-                    </Stack.Item>
-                  )}
-                  <Stack.Item>
-                    <RaisedHandIcon />
-                  </Stack.Item>
-                </Stack>
-              )
-            }
-            {callingParticipant.isScreenSharing && (
-              <Icon
-                iconName="ParticipantItemScreenShareStart"
-                className={iconStyles}
-                ariaLabel={strings.sharingIconLabel}
-              />
-            )}
-            {callingParticipant.isMuted && (
-              <Icon iconName="ParticipantItemMicOff" className={iconStyles} ariaLabel={strings.mutedIconLabel} />
-            )}
-          </Stack>
-        )
-      : () => null;
+  const shouldRenderParticipantIcon =
+    isScreenSharing || isMuted || hasRaisedHand || isPinned || !isAudioPermitted || !isVideoPermitted;
 
-  /* @conditional-compile-remove(raise-hand) */
+  const onRenderIcon = shouldRenderParticipantIcon
+    ? () => (
+        <Stack horizontal={true} tokens={{ childrenGap: '0.5rem' }}>
+          {callingParticipant.raisedHand && (
+            <Stack
+              horizontal={true}
+              tokens={{ childrenGap: '0.2rem' }}
+              style={{
+                alignItems: 'center',
+                padding: '0.1rem 0.2rem',
+                backgroundColor: theme?.palette.neutralLighter,
+                borderRadius: '0.3rem'
+              }}
+            >
+              {callingParticipant.raisedHand.raisedHandOrderPosition && (
+                <Stack.Item>
+                  <Text>{callingParticipant.raisedHand?.raisedHandOrderPosition}</Text>
+                </Stack.Item>
+              )}
+              <Stack.Item>
+                <RaisedHandIcon />
+              </Stack.Item>
+            </Stack>
+          )}
+          {callingParticipant.isScreenSharing && (
+            <Icon
+              iconName="ParticipantItemScreenShareStart"
+              className={iconStyles}
+              ariaLabel={strings.sharingIconLabel}
+            />
+          )}
+          {callingParticipant.spotlight && <Icon iconName="ParticipantItemSpotlighted" className={iconStyles} />}
+          {isPinned && <Icon iconName="ParticipantItemPinned" className={iconStyles} />}
+          {callingParticipant.mediaAccess && !callingParticipant.mediaAccess.isVideoPermitted ? (
+            <Icon iconName="ControlButtonCameraProhibited" className={iconStyles} ariaLabel={strings.mutedIconLabel} />
+          ) : undefined}
+          {callingParticipant.mediaAccess && !callingParticipant.mediaAccess?.isAudioPermitted ? (
+            <Icon iconName="ControlButtonMicProhibited" className={iconStyles} ariaLabel={strings.mutedIconLabel} />
+          ) : undefined}
+          {(callingParticipant.mediaAccess ? callingParticipant.mediaAccess.isAudioPermitted : true) &&
+          callingParticipant.isMuted ? (
+            <Icon iconName="ParticipantItemMicOff" className={iconStyles} ariaLabel={strings.mutedIconLabel} />
+          ) : undefined}
+        </Stack>
+      )
+    : () => null;
+
   const onRenderAvatarWithRaiseHand =
     callingParticipant?.raisedHand && onRenderAvatar
       ? (
@@ -211,6 +222,26 @@ const onRenderParticipantDefault = (
           )
       : onRenderAvatar;
 
+  const ariaLabelTemplate =
+    (menuItems && menuItems.length > 0 ? strings?.participantItemWithMoreOptionsAriaLabel : undefined) ??
+    strings?.participantItemAriaLabel;
+  const ariaLabel = _formatString(ariaLabelTemplate ?? '', {
+    displayName: displayName ?? '',
+    connectionState: formatParticipantStateString(callingParticipant, strings) ?? '',
+    mutedState: (callingParticipant.isMuted ? strings?.mutedIconLabel : undefined) ?? '',
+    micDisabledState:
+      (callingParticipant.mediaAccess?.isAudioPermitted === false ? strings?.micDisabledIconLabel : undefined) ?? '',
+    cameraDisabledState:
+      (callingParticipant.mediaAccess?.isVideoPermitted === false ? strings?.cameraDisabledIconLabel : undefined) ?? '',
+    sharingState: (callingParticipant.isScreenSharing ? strings?.sharingIconLabel : undefined) ?? '',
+    handRaisedState:
+      (callingParticipant.raisedHand?.raisedHandOrderPosition
+        ? _formatString(strings?.handRaisedIconLabel ?? '', {
+            position: callingParticipant.raisedHand?.raisedHandOrderPosition?.toString() ?? ''
+          })
+        : undefined) ?? ''
+  });
+
   return (
     <ParticipantItem
       styles={styles}
@@ -222,12 +253,13 @@ const onRenderParticipantDefault = (
       presence={presence}
       onRenderIcon={onRenderIcon}
       onRenderAvatar={onRenderAvatarWithRaiseHand}
-      onClick={() => onParticipantClick?.(participant)}
+      onClick={onParticipantClick ? () => onParticipantClick?.(participant) : undefined}
       showParticipantOverflowTooltip={showParticipantOverflowTooltip}
-      /* @conditional-compile-remove(one-to-n-calling) */
-      /* @conditional-compile-remove(PSTN-calls) */
       participantState={callingParticipant.state}
       ariaLabelledBy={participantAriaLabelledBy}
+      strings={{
+        participantItemAriaLabel: ariaLabel
+      }}
     />
   );
 };
@@ -236,12 +268,10 @@ const onRenderParticipantDefault = (
  * Sort participants by raised hand order position
  */
 const sortParticipants = (participants: ParticipantListParticipant[]): ParticipantListParticipant[] => {
-  /* @conditional-compile-remove(raise-hand) */
   const isParticipantListCallParticipant = function (participant: ParticipantListParticipant): boolean {
     return 'raisedHand' in participant;
   };
 
-  /* @conditional-compile-remove(raise-hand) */
   participants.sort((a, b) => {
     if (!isParticipantListCallParticipant(a) || !isParticipantListCallParticipant(b)) {
       return 0;
@@ -302,17 +332,15 @@ export const ParticipantList = (props: ParticipantListProps): JSX.Element => {
     totalParticipantCount,
     /* @conditional-compile-remove(total-participant-count) */
     strings,
-    participantAriaLabelledBy
+    participantAriaLabelledBy,
+    pinnedParticipants
   } = props;
 
-  /* @conditional-compile-remove(raise-hand) */
   const theme = useTheme();
   const ids = useIdentifiers();
   const participantItemStrings = useLocale().strings.participantItem;
   /* @conditional-compile-remove(total-participant-count) */
   const participantListStrings = useLocale().strings.ParticipantList;
-  /* @conditional-compile-remove(hide-attendee-name) */
-  const attendeeRoleString = useLocale().strings.AttendeeRole;
 
   const displayedParticipants: ParticipantListParticipant[] = useMemo(() => {
     return onRenderParticipant ? participants : getParticipantsForDefaultRender(participants, excludeMe, myUserId);
@@ -333,6 +361,10 @@ export const ParticipantList = (props: ParticipantListProps): JSX.Element => {
           itemProps: {
             styles: props.styles?.participantItemStyles?.participantSubMenuItemsStyles
           },
+          iconProps: {
+            iconName: 'ContextMenuRemoveParticipant',
+            styles: { root: { lineHeight: 0 } }
+          },
           'data-ui-id': ids.participantListRemoveParticipantButton
         });
       }
@@ -349,7 +381,6 @@ export const ParticipantList = (props: ParticipantListProps): JSX.Element => {
       onFetchParticipantMenuItems,
       onRemoveParticipant,
       props.styles?.participantItemStyles?.participantSubMenuItemsStyles,
-      /* @conditional-compile-remove(raise-hand) */
       participantItemStrings.removeButtonLabel
     ]
   );
@@ -382,10 +413,8 @@ export const ParticipantList = (props: ParticipantListProps): JSX.Element => {
               props.onParticipantClick,
               showParticipantOverflowTooltip,
               participantAriaLabelledBy,
-              /* @conditional-compile-remove(raise-hand) */
               theme,
-              /* @conditional-compile-remove(hide-attendee-name) */
-              attendeeRoleString
+              pinnedParticipants
             )
       )}
       {

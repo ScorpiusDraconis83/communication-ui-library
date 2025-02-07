@@ -16,12 +16,6 @@ export const convertChatMessage = (
   return {
     ...message,
     clientMessageId: clientMessageId,
-    status,
-    /* @conditional-compile-remove(data-loss-prevention) */
-    policyViolation: !!(
-      message.sender?.kind === 'microsoftTeamsUser' &&
-      !!message.editedOn &&
-      message.content?.message === ''
-    )
+    status
   };
 };

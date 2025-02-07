@@ -5,16 +5,19 @@ import { CommunicationIdentifierKind } from '@azure/communication-common';
 import { CallState, DeviceManagerState } from '@internal/calling-stateful-client';
 import { ChatThreadClientState } from '@internal/chat-stateful-client';
 import { CallAdapter, CallAdapterState, CallCompositePage } from '../../CallComposite';
-/* @conditional-compile-remove(video-background-effects) */
+
 import { VideoBackgroundImage, VideoBackgroundEffect } from '../../CallComposite';
-/* @conditional-compile-remove(video-background-effects) */
-import { VideoBackgroundEffectsDependency } from '@internal/calling-component-bindings';
-import { ChatAdapter, ChatAdapterState } from '../../ChatComposite';
-/* @conditional-compile-remove(file-sharing) */
-import { FileUploadsUiState } from '../../ChatComposite';
+
+import {
+  DeepNoiseSuppressionEffectDependency,
+  VideoBackgroundEffectsDependency
+} from '@internal/calling-component-bindings';
+import { ChatAdapterState } from '../../ChatComposite';
 import { AdapterErrors } from '../../common/adapters';
-/* @conditional-compile-remove(unsupported-browser) */
+/* @conditional-compile-remove(breakout-rooms) */
+import { AdapterNotifications } from '../../common/adapters';
 import { EnvironmentInfo } from '@azure/communication-calling';
+import { ReactionResources } from '@internal/react-components';
 
 /**
  * UI state pertaining to the {@link CallWithChatComposite}.
@@ -34,15 +37,6 @@ export interface CallWithChatAdapterUiState {
    * @public
    */
   page: CallCompositePage;
-  /* @conditional-compile-remove(file-sharing) */
-  /**
-   * Files being uploaded by a user in the current thread.
-   * Should be set to null once the upload is complete.
-   * Array of type {@link FileUploadsUiState}
-   *
-   * @beta
-   */
-  fileUploads?: FileUploadsUiState;
   /* @conditional-compile-remove(unsupported-browser) */
   /**
    * State to track whether the end user has opted in to using a
@@ -70,30 +64,43 @@ export interface CallWithChatClientState {
   chat?: ChatThreadClientState;
   /** Latest call error encountered for each operation performed via the adapter. */
   latestCallErrors: AdapterErrors;
+  /* @conditional-compile-remove(breakout-rooms) */
+  /** Latest call notifications encountered in the call client state via the adapter. */
+  latestCallNotifications: AdapterNotifications;
   /** Latest chat error encountered for each operation performed via the adapter. */
   latestChatErrors: AdapterErrors;
   /** State of available and currently selected devices */
   devices: DeviceManagerState;
   /** State of whether the active call is a Teams interop call */
   isTeamsCall: boolean;
-  /* @conditional-compile-remove(PSTN-calls) */
+  /** State of whether the active call is a Teams interop meeting */
+  isTeamsMeeting: boolean;
   /** alternateCallerId for PSTN call */
-  alternateCallerId?: string | undefined;
-  /* @conditional-compile-remove(unsupported-browser) */
+  alternateCallerId?: string;
   /** Environment information for system adapter is made on */
   environmentInfo?: EnvironmentInfo;
-  /* @conditional-compile-remove(video-background-effects) */
   /** Default set of background images for background replacement effect */
   videoBackgroundImages?: VideoBackgroundImage[];
-  /* @conditional-compile-remove(video-background-effects) */
   /** Dependency to be injected for video background effects */
   onResolveVideoEffectDependency?: () => Promise<VideoBackgroundEffectsDependency>;
-  /* @conditional-compile-remove(video-background-effects) */
+  /**
+   * Dependency to be injected for deep noise suppression effect.
+   */
+  onResolveDeepNoiseSuppressionDependency?: () => Promise<DeepNoiseSuppressionEffectDependency>;
+  /** State to track whether the noise suppression should be on by default.
+   */
+  deepNoiseSuppressionOnByDefault?: boolean;
+  /** State to track whether to hide the noise suppression button.
+   */
+  hideDeepNoiseSuppressionButton?: boolean;
   /** State to track the selected video background effect */
   selectedVideoBackgroundEffect?: VideoBackgroundEffect;
-  /* @conditional-compile-remove(hide-attendee-name) */
   /** Hide attendee names in teams meeting */
   hideAttendeeNames?: boolean;
+  /**
+   * Reaction resources to render in meetings
+   * */
+  reactions?: ReactionResources;
 }
 
 /**
@@ -107,39 +114,32 @@ export interface CallWithChatAdapterState extends CallWithChatAdapterUiState, Ca
 /**
  * @private
  */
-export function callWithChatAdapterStateFromBackingStates(
-  callAdapter: CallAdapter,
-  chatAdapter: ChatAdapter
-): CallWithChatAdapterState {
+export function callWithChatAdapterStateFromBackingStates(callAdapter: CallAdapter): CallWithChatAdapterState {
   const callAdapterState = callAdapter.getState();
-  const chatAdapterState = chatAdapter.getState();
 
   return {
     call: callAdapterState.call,
-    chat: chatAdapterState.thread,
+    chat: undefined,
     userId: callAdapterState.userId,
     page: callAdapterState.page,
     displayName: callAdapterState.displayName,
     devices: callAdapterState.devices,
     isLocalPreviewMicrophoneEnabled: callAdapterState.isLocalPreviewMicrophoneEnabled,
     isTeamsCall: callAdapterState.isTeamsCall,
+    isTeamsMeeting: callAdapterState.isTeamsMeeting,
     latestCallErrors: callAdapterState.latestErrors,
-    latestChatErrors: chatAdapterState.latestErrors,
-    /* @conditional-compile-remove(file-sharing) */
-    fileUploads: chatAdapterState.fileUploads,
-    /* @conditional-compile-remove(PSTN-calls) */
+    /* @conditional-compile-remove(breakout-rooms) */
+    latestCallNotifications: callAdapterState.latestNotifications,
+    latestChatErrors: {},
     alternateCallerId: callAdapterState.alternateCallerId,
-    /* @conditional-compile-remove(unsupported-browser) */
     environmentInfo: callAdapterState.environmentInfo,
-    /* @conditional-compile-remove(video-background-effects) */
     videoBackgroundImages: callAdapterState.videoBackgroundImages,
-    /* @conditional-compile-remove(video-background-effects) */
     onResolveVideoEffectDependency: callAdapterState.onResolveVideoEffectDependency,
-    /* @conditional-compile-remove(video-background-effects) */
+    onResolveDeepNoiseSuppressionDependency: callAdapterState.onResolveDeepNoiseSuppressionDependency,
     selectedVideoBackgroundEffect: callAdapterState.selectedVideoBackgroundEffect,
-    /* @conditional-compile-remove(hide-attendee-name) */
     /** Hide attendee names in teams meeting */
-    hideAttendeeNames: callAdapterState.hideAttendeeNames
+    hideAttendeeNames: callAdapterState.hideAttendeeNames,
+    reactions: callAdapterState.reactions
   };
 }
 
@@ -153,9 +153,7 @@ export function mergeChatAdapterStateIntoCallWithChatAdapterState(
   return {
     ...existingCallWithChatAdapterState,
     chat: chatAdapterState.thread,
-    latestChatErrors: chatAdapterState.latestErrors,
-    /* @conditional-compile-remove(file-sharing) */
-    fileUploads: chatAdapterState.fileUploads
+    latestChatErrors: chatAdapterState.latestErrors
   };
 }
 
@@ -175,12 +173,15 @@ export function mergeCallAdapterStateIntoCallWithChatAdapterState(
     call: callAdapterState.call,
     isLocalPreviewMicrophoneEnabled: callAdapterState.isLocalPreviewMicrophoneEnabled,
     isTeamsCall: callAdapterState.isTeamsCall,
+    isTeamsMeeting: callAdapterState.isTeamsMeeting,
     latestCallErrors: callAdapterState.latestErrors,
-    /* @conditional-compile-remove(video-background-effects) */
+    /* @conditional-compile-remove(breakout-rooms) */
+    latestCallNotifications: callAdapterState.latestNotifications,
     videoBackgroundImages: callAdapterState.videoBackgroundImages,
-    /* @conditional-compile-remove(video-background-effects) */
     onResolveVideoEffectDependency: callAdapterState.onResolveVideoEffectDependency,
-    /* @conditional-compile-remove(video-background-effects) */
+    onResolveDeepNoiseSuppressionDependency: callAdapterState.onResolveDeepNoiseSuppressionDependency,
+    deepNoiseSuppressionOnByDefault: callAdapterState.deepNoiseSuppressionOnByDefault,
+    hideDeepNoiseSuppressionButton: callAdapterState.hideDeepNoiseSuppressionButton,
     selectedVideoBackgroundEffect: callAdapterState.selectedVideoBackgroundEffect
   };
 }

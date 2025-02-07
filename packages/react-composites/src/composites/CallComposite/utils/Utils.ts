@@ -1,45 +1,45 @@
 // Copyright (c) Microsoft Corporation.
 // Licensed under the MIT License.
 
-import { CallAdapterState, CallCompositePage, END_CALL_PAGES } from '../adapter/CallAdapter';
+import { CallAdapterState, CallCompositePage, END_CALL_PAGES, StartCallIdentifier } from '../adapter/CallAdapter';
 import { _isInCall, _isPreviewOn, _isInLobbyOrConnecting } from '@internal/calling-component-bindings';
 import { CallControlOptions } from '../types/CallControlOptions';
 import { CallState, RemoteParticipantState } from '@internal/calling-stateful-client';
 import { isPhoneNumberIdentifier } from '@azure/communication-common';
-/* @conditional-compile-remove(unsupported-browser) */
-import { EnvironmentInfo } from '@azure/communication-calling';
-import { AdapterStateModifier } from '../adapter/AzureCommunicationCallAdapter';
-/* @conditional-compile-remove(video-background-effects) */
+import { AdapterStateModifier, CallAdapterLocator } from '../adapter/AzureCommunicationCallAdapter';
+
 import { VideoBackgroundEffectsDependency } from '@internal/calling-component-bindings';
-/* @conditional-compile-remove(video-background-effects) */
+
 import { VideoBackgroundEffect } from '../adapter/CallAdapter';
-import { VideoDeviceInfo } from '@azure/communication-calling';
-/* @conditional-compile-remove(video-background-effects) */
+import { EnvironmentInfo, VideoDeviceInfo } from '@azure/communication-calling';
+
 import { VideoEffectProcessor } from '@azure/communication-calling';
 import { CompositeLocale } from '../../localization';
 import { CallCompositeIcons } from '../../common/icons';
 
+import { ActiveNotification } from '@internal/react-components';
+
 const ACCESS_DENIED_TEAMS_MEETING_SUB_CODE = 5854;
 const REMOTE_PSTN_USER_HUNG_UP = 560000;
 const REMOVED_FROM_CALL_SUB_CODES = [5000, 5300, REMOTE_PSTN_USER_HUNG_UP];
-/* @conditional-compile-remove(calling-sounds) */
 const CALL_REJECTED_CODE = 603;
-/* @conditional-compile-remove(rooms) */
+const INVALID_MEETING_IDENTIFIER = 5751;
 /** @private */
 export const ROOM_NOT_FOUND_SUB_CODE = 5732;
-/* @conditional-compile-remove(rooms) */
 /** @private */
 export const ROOM_NOT_VALID_SUB_CODE = 5829;
-/* @conditional-compile-remove(rooms) */
 /** @private */
 export const NOT_INVITED_TO_ROOM_SUB_CODE = 5828;
-/* @conditional-compile-remove(rooms) */
 /** @private */
 export const INVITE_TO_ROOM_REMOVED_SUB_CODE = 5317;
 /** @private */
 export const CALL_TIMEOUT_SUB_CODE = 10004;
 /** @private */
 export const CALL_TIMEOUT_CODE = 487;
+/** @private */
+export const BOT_TIMEOUT_CODE = 486;
+/** @private */
+export const BOT_TIMEOUT_SUB_CODE = 10321;
 
 /**
  * @private
@@ -88,7 +88,8 @@ export const reduceCallControlsForMobile = (
 enum CallEndReasons {
   LEFT_CALL,
   ACCESS_DENIED,
-  REMOVED_FROM_CALL
+  REMOVED_FROM_CALL,
+  BAD_REQUEST
 }
 
 const getCallEndReason = (call: CallState): CallEndReasons => {
@@ -101,7 +102,7 @@ const getCallEndReason = (call: CallState): CallEndReasons => {
    * Note: This check will only work for 1:1 PSTN Calls. The subcode is different for 1:N PSTN calls, and we do not need to handle that case.
    */
   if (
-    remoteParticipantsEndedArray.length === 1 &&
+    remoteParticipantsEndedArray[0] &&
     isPhoneNumberIdentifier(remoteParticipantsEndedArray[0].identifier) &&
     call.callEndReason?.subCode !== REMOTE_PSTN_USER_HUNG_UP
   ) {
@@ -114,6 +115,11 @@ const getCallEndReason = (call: CallState): CallEndReasons => {
 
   if (call.callEndReason?.subCode && REMOVED_FROM_CALL_SUB_CODES.includes(call.callEndReason.subCode)) {
     return CallEndReasons.REMOVED_FROM_CALL;
+  }
+
+  // If the call end reason code is 400, the call is ended due to a bad request. Keep this line at the bottom right before returning normal left call to catch the scenarios not including the ones above.
+  if (call.callEndReason?.code === 400) {
+    return CallEndReasons.BAD_REQUEST;
   }
 
   if (call.callEndReason) {
@@ -136,7 +142,6 @@ export const getEndedCallPageProps = (
   let moreDetails = locale.strings.call.leftCallMoreDetails;
   let disableStartCallButton = false;
   let iconName: keyof CallCompositeIcons = 'NoticePageLeftCall';
-  /* @conditional-compile-remove(rooms) */
   switch (endedCall?.callEndReason?.subCode) {
     case ROOM_NOT_FOUND_SUB_CODE:
       if (locale.strings.call.roomNotFoundTitle) {
@@ -177,8 +182,16 @@ export const getEndedCallPageProps = (
         disableStartCallButton = true;
         iconName = 'NoticePageCallTimeout';
       }
+      break;
+    case BOT_TIMEOUT_SUB_CODE:
+      if (endedCall?.callEndReason?.code === BOT_TIMEOUT_CODE && locale.strings.call.callTimeoutBotTitle) {
+        title = locale.strings.call.callTimeoutBotTitle;
+        moreDetails = locale.strings.call.callTimeoutBotDetails;
+        disableStartCallButton = true;
+        iconName = 'NoticePageCallTimeout';
+      }
+      break;
   }
-  /* @conditional-compile-remove(calling-sounds) */
   switch (endedCall?.callEndReason?.code) {
     case CALL_REJECTED_CODE:
       if (locale.strings.call.callRejectedTitle) {
@@ -189,7 +202,6 @@ export const getEndedCallPageProps = (
       }
       break;
   }
-  /* @conditional-compile-remove(teams-adhoc-call) */
   switch (endedCall?.callEndReason?.subCode) {
     case 10037:
       if (locale.strings.call.participantCouldNotBeReachedTitle) {
@@ -220,6 +232,24 @@ export const getEndedCallPageProps = (
       }
       break;
   }
+  switch (endedCall?.callEndReason?.subCode) {
+    case INVALID_MEETING_IDENTIFIER:
+      if (locale.strings.call.callRejectedTitle) {
+        title = locale.strings.call.callRejectedTitle;
+        moreDetails = locale.strings.call.invalidMeetingIdentifier;
+        disableStartCallButton = true;
+      }
+      break;
+  }
+  // keep this at the bottom to catch the scenarios not including the ones above.
+  switch (endedCall?.callEndReason?.code) {
+    case 400:
+      if (locale.strings.call.callRejectedTitle) {
+        title = locale.strings.call.callRejectedTitle;
+        disableStartCallButton = true;
+      }
+      break;
+  }
   return { title, moreDetails, disableStartCallButton, iconName };
 };
 
@@ -233,11 +263,12 @@ type GetCallCompositePageFunction = ((
   ((
     call: CallState | undefined,
     previousCall: CallState | undefined,
+    transferCall?: CallState,
+    isReturningFromBreakoutRoom?: boolean,
     /* @conditional-compile-remove(unsupported-browser) */ unsupportedBrowserInfo?: {
       environmentInfo?: EnvironmentInfo;
       unsupportedBrowserVersionOptedIn?: boolean;
-    },
-    /* @conditional-compile-remove(call-transfer) */ transferCall?: CallState
+    }
   ) => CallCompositePage);
 /**
  * Get the current call composite page based on the current call composite state
@@ -255,22 +286,31 @@ type GetCallCompositePageFunction = ((
 export const getCallCompositePage: GetCallCompositePageFunction = (
   call,
   previousCall?,
-  unsupportedBrowserInfo?,
-  transferCall?: CallState
+  transferCall?: CallState,
+  isReturningFromBreakoutRoom?: boolean,
+  unsupportedBrowserInfo?: {
+    /* @conditional-compile-remove(unsupported-browser) */
+    environmentInfo?: EnvironmentInfo;
+    unsupportedBrowserVersionOptedIn?: boolean;
+  }
 ): CallCompositePage => {
   /* @conditional-compile-remove(unsupported-browser) */
   if (
     isUnsupportedEnvironment(
-      unsupportedBrowserInfo.environmentInfo,
-      unsupportedBrowserInfo.unsupportedBrowserVersionOptedIn
+      unsupportedBrowserInfo?.environmentInfo,
+      unsupportedBrowserInfo?.unsupportedBrowserVersionOptedIn
     )
   ) {
     return 'unsupportedEnvironment';
   }
 
-  /* @conditional-compile-remove(call-transfer) */
   if (transferCall !== undefined) {
     return 'transferring';
+  }
+
+  /* @conditional-compile-remove(breakout-rooms) */
+  if (isReturningFromBreakoutRoom) {
+    return 'returningFromBreakoutRoom';
   }
 
   if (call) {
@@ -283,9 +323,7 @@ export const getCallCompositePage: GetCallCompositePageFunction = (
       return 'lobby';
       // `LocalHold` needs to be checked before `isInCall` since it is also a state that's considered in call.
     } else if (call?.state === 'LocalHold') {
-      /* @conditional-compile-remove(PSTN-calls) */ /* @conditional-compile-remove(one-to-n-calling) */
       return 'hold';
-      return 'call';
     } else if (call?.state === 'Disconnecting') {
       return 'leaving';
     } else if (_isInCall(call?.state)) {
@@ -307,6 +345,8 @@ export const getCallCompositePage: GetCallCompositePageFunction = (
         return 'accessDeniedTeamsMeeting';
       case CallEndReasons.REMOVED_FROM_CALL:
         return 'removedFromCall';
+      case CallEndReasons.BAD_REQUEST:
+        return 'badRequest';
       case CallEndReasons.LEFT_CALL:
         if (previousCall.diagnostics.network.latest.noNetwork) {
           return 'joinCallFailedDueToNoNetwork';
@@ -349,17 +389,25 @@ export const disableCallControls = (
     return false;
   }
   // Ensure we clone the prop if it is an object to ensure we do not mutate the original prop.
-  let newOptions =
+  let newOptions: CallControlOptions | boolean | undefined =
     (callControlOptions instanceof Object ? ({ ...callControlOptions } as CallControlOptions) : callControlOptions) ??
-    {};
+    ({} as Partial<CallControlOptions>);
   if (newOptions === true || newOptions === undefined) {
     newOptions = disabledControls.reduce((acc, key) => {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      // @ts-expect-error TODO: fix noImplicitAny error here
+      // Not solveable at this time due to typescript limitations. The typing is too complex for typescript to
+      // understand. Will need to revisit when either typescript or the calling component bindings are updated.
       acc[key] = { disabled: true };
       return acc;
-    }, {});
+    }, {} as Partial<CallControlOptions>);
   } else {
     disabledControls.forEach((key) => {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      // @ts-expect-error refer to above comment
       if (newOptions[key] !== false) {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        // @ts-expect-error refer to above comment
         newOptions[key] = { disabled: true };
       }
     });
@@ -444,12 +492,8 @@ const isUnsupportedEnvironment = (
  * Check if we are using safari browser
  * @private
  */
-export const _isSafari = (
-  environmentInfo: undefined | /* @conditional-compile-remove(unsupported-browser) */ EnvironmentInfo
-): boolean => {
-  /* @conditional-compile-remove(unsupported-browser) */
-  return environmentInfo?.environment.browser === 'safari';
-  return /^((?!chrome|android|crios|fxios).)*safari/i.test(navigator.userAgent);
+export const _isSafari = (environmentInfo: undefined | EnvironmentInfo): boolean => {
+  return environmentInfo?.environment.browser.toLowerCase() === 'safari';
 };
 
 /**
@@ -466,7 +510,9 @@ export const createParticipantModifier = (
         [keys: string]: RemoteParticipantState;
       }
     | undefined = undefined;
-  let modifiedParticipants = {};
+  let modifiedParticipants: {
+    [keys: string]: RemoteParticipantState;
+  } = {};
   const memoizedParticipants: {
     [id: string]: { originalRef: RemoteParticipantState; newParticipant: RemoteParticipantState };
   } = {};
@@ -475,24 +521,29 @@ export const createParticipantModifier = (
     // if root state is the same, we don't need to update the participants
     if (state.call?.remoteParticipants !== previousParticipantState) {
       modifiedParticipants = {};
-      const originalParticipants = state.call?.remoteParticipants;
-      for (const key in originalParticipants) {
-        const modifiedParticipant = createModifiedParticipant(key, originalParticipants[key]);
+      const originalParticipants = Object.entries(state.call?.remoteParticipants || {});
+      for (const [key, originalParticipant] of originalParticipants) {
+        const modifiedParticipant = createModifiedParticipant(key, originalParticipant);
         if (modifiedParticipant === undefined) {
-          modifiedParticipants[key] = originalParticipants[key];
+          modifiedParticipants[key] = originalParticipant;
           continue;
         }
         // Generate the new item if original cached item has been changed
-        if (memoizedParticipants[key]?.originalRef !== originalParticipants[key]) {
+        if (memoizedParticipants[key]?.originalRef !== originalParticipant) {
           memoizedParticipants[key] = {
             newParticipant: modifiedParticipant,
-            originalRef: originalParticipants[key]
+            originalRef: originalParticipant
           };
         }
 
         // the modified participant is always coming from the memoized cache, whether is was refreshed
         // from the previous closure or not
-        modifiedParticipants[key] = memoizedParticipants[key].newParticipant;
+        const memoizedParticipant = memoizedParticipants[key];
+        if (!memoizedParticipant) {
+          throw new Error('Participant modifier encountered an unhandled exception.');
+        }
+
+        modifiedParticipants[key] = memoizedParticipant.newParticipant;
       }
 
       previousParticipantState = state.call?.remoteParticipants;
@@ -509,7 +560,6 @@ export const createParticipantModifier = (
   };
 };
 
-/* @conditional-compile-remove(video-background-effects) */
 /** @private */
 export const getBackgroundEffectFromSelectedEffect = (
   selectedEffect: VideoBackgroundEffect | undefined,
@@ -518,10 +568,10 @@ export const getBackgroundEffectFromSelectedEffect = (
   selectedEffect?.effectName === 'blur'
     ? VideoBackgroundEffectsDependency.createBackgroundBlurEffect()
     : selectedEffect?.effectName === 'replacement'
-    ? VideoBackgroundEffectsDependency.createBackgroundReplacementEffect({
-        backgroundImageUrl: selectedEffect.backgroundImageUrl
-      })
-    : undefined;
+      ? VideoBackgroundEffectsDependency.createBackgroundReplacementEffect({
+          backgroundImageUrl: selectedEffect.backgroundImageUrl
+        })
+      : undefined;
 
 /**
  * @remarks this logic should mimic the onToggleCamera in the common call handlers.
@@ -529,3 +579,180 @@ export const getBackgroundEffectFromSelectedEffect = (
  */
 export const getSelectedCameraFromAdapterState = (state: CallAdapterState): VideoDeviceInfo | undefined =>
   state.devices.selectedCamera || state.devices.cameras[0];
+
+/**
+ * Helper to determine if the adapter has a locator or targetCallees
+ * @param locatorOrTargetCallees
+ * @returns boolean to determine if the adapter has a locator or targetCallees, true is locator, false is targetCallees
+ * @private
+ */
+export const getLocatorOrTargetCallees = (
+  locatorOrTargetCallees: CallAdapterLocator | StartCallIdentifier[]
+): locatorOrTargetCallees is StartCallIdentifier[] => {
+  return !!Array.isArray(locatorOrTargetCallees);
+};
+
+/**
+ * @private
+ */
+export type ComplianceState = 'on' | 'off' | 'stopped';
+
+/**
+ * Return different conditions based on the current and previous state of recording and transcribing
+ *
+ * @param callRecordState - The current call record state: on, off, stopped
+ * @param callTranscribeState - The current call transcribe state: on, off, stopped
+ *
+ * @remarks - The stopped state means: previously on but currently off
+ *
+ * @private
+ */
+export const computeVariant = (
+  callRecordState: ComplianceState,
+  callTranscribeState: ComplianceState
+): ComplianceNotificationVariant => {
+  if (callRecordState === 'on' && callTranscribeState === 'on') {
+    return 'recordingAndTranscriptionStarted';
+  } else if (callRecordState === 'on' && callTranscribeState === 'off') {
+    return 'recordingStarted';
+  } else if (callRecordState === 'off' && callTranscribeState === 'on') {
+    return 'transcriptionStarted';
+  } else if (callRecordState === 'on' && callTranscribeState === 'stopped') {
+    return 'transcriptionStoppedStillRecording';
+  } else if (callRecordState === 'stopped' && callTranscribeState === 'on') {
+    return 'recordingStoppedStillTranscribing';
+  } else if (callRecordState === 'off' && callTranscribeState === 'stopped') {
+    return 'transcriptionStopped';
+  } else if (callRecordState === 'stopped' && callTranscribeState === 'off') {
+    return 'recordingStopped';
+  } else if (callRecordState === 'stopped' && callTranscribeState === 'stopped') {
+    return 'recordingAndTranscriptionStopped';
+  } else {
+    return 'noState';
+  }
+};
+
+/**
+ * @private
+ */
+export type ComplianceNotificationVariant =
+  | 'noState'
+  | 'recordingStarted'
+  | 'transcriptionStarted'
+  | 'recordingStopped'
+  | 'transcriptionStopped'
+  | 'recordingAndTranscriptionStarted'
+  | 'recordingAndTranscriptionStopped'
+  | 'recordingStoppedStillTranscribing'
+  | 'transcriptionStoppedStillRecording';
+
+/**
+ * @private
+ */
+export type CachedComplianceNotificationProps = {
+  latestBooleanState: {
+    callTranscribeState?: boolean;
+    callRecordState?: boolean;
+  };
+  latestStringState: {
+    callTranscribeState: ComplianceState;
+    callRecordState: ComplianceState;
+  };
+  // Timestamp for the last time cached state was updated.
+  // Represented as milliseconds since epoch (i.e., the value returned by Date.now()).
+  lastUpdated: number;
+};
+
+/**
+ * @private
+ */
+export function determineStates(previous: ComplianceState, current: boolean | undefined): ComplianceState {
+  // if current state is on, then return on
+  if (current) {
+    return 'on';
+  }
+  // if current state is off
+  else {
+    // if previous state is on and current state is off, return stopped (on -> off)
+    if (previous === 'on') {
+      return 'stopped';
+    }
+    // otherwise remain previous state unchanged
+    else {
+      return previous;
+    }
+  }
+}
+
+// The debounce time for the stopped state to be shown after both states are stopped.
+// This is to prevent stopped messages from being lost by transitioning to "Off" too
+// quickly if the states are toggled in quick succession.
+// This also prevents React strict mode from transitioning to "Off" too quickly.
+const ComplianceNotificationOffDebounceTimeMs = 2000;
+
+/**
+ * Compute compliance notification based on latest compliance state and cached props.
+ * @private
+ */
+export function computeComplianceNotification(
+  complianceProps: {
+    callTranscribeState: boolean;
+    callRecordState: boolean;
+  },
+  cachedProps: React.MutableRefObject<CachedComplianceNotificationProps>
+): ActiveNotification | undefined {
+  // Only update cached props and variant if there is _some_ change in the latest props.
+  // This ensures that state machine is only updated if there is an actual change in the props.
+  const shouldUpdateCached =
+    complianceProps.callRecordState !== cachedProps.current.latestBooleanState.callRecordState ||
+    complianceProps.callTranscribeState !== cachedProps.current.latestBooleanState.callTranscribeState;
+
+  // The following three operations must be performed in this exact order:
+
+  // [1]: Update cached state to transition the state machine.
+  if (shouldUpdateCached) {
+    cachedProps.current = {
+      latestBooleanState: complianceProps,
+      latestStringState: {
+        callRecordState: determineStates(
+          cachedProps.current.latestStringState.callRecordState,
+          complianceProps.callRecordState
+        ),
+        callTranscribeState: determineStates(
+          cachedProps.current.latestStringState.callTranscribeState,
+          complianceProps.callTranscribeState
+        )
+      },
+      lastUpdated: Date.now()
+    };
+  }
+
+  // [2]: If the callRecordState and callTranscribeState are both stopped for a predetermined amount of time, mark both states as off.
+  // NOTE: this can be removed once lastStoppedRecording in the calling stateful client is GA.
+  if (
+    shouldUpdateCached &&
+    cachedProps.current.latestStringState.callRecordState === 'stopped' &&
+    cachedProps.current.latestStringState.callTranscribeState === 'stopped' &&
+    Date.now() - cachedProps.current.lastUpdated > ComplianceNotificationOffDebounceTimeMs
+  ) {
+    // When both states are stopped, after displaying message "RECORDING_AND_TRANSCRIPTION_STOPPED", change both states to off (going back to the default state).
+    cachedProps.current.latestStringState.callRecordState = 'off';
+    cachedProps.current.latestStringState.callTranscribeState = 'off';
+  }
+
+  // [3]: Compute the variant, using the transitioned state machine.
+  const variant = computeVariant(
+    cachedProps.current.latestStringState.callRecordState,
+    cachedProps.current.latestStringState.callTranscribeState
+  );
+
+  // If the variant is not 'noState', then show the notification.
+  if (variant !== 'noState') {
+    return {
+      type: variant,
+      timestamp: new Date(Date.now())
+    };
+  } else {
+    return undefined;
+  }
+}

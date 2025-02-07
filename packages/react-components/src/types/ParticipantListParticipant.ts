@@ -17,19 +17,32 @@ export type CallParticipantListParticipant = ParticipantListParticipant & {
   isMuted?: boolean;
   /** Whether calling participant is speaking */
   isSpeaking?: boolean;
-  /* @conditional-compile-remove(raise-hand) */
   /** Whether calling participant is raised hand */
   raisedHand?: RaisedHand;
-  /* @conditional-compile-remove(reaction) */
   /**
    * Whether calling participant has reacted
    *
    * @beta
    * */
   reaction?: Reaction;
+  /** Whether calling participant is spotlighted **/
+  spotlight?: Spotlight;
+  /** Whether calling participant has audio/video media access blocked **/
+  mediaAccess?: MediaAccess;
 };
 
-/* @conditional-compile-remove(raise-hand) */
+/**
+ * Spotlight state with order
+ *
+ * @public
+ */
+export type Spotlight = {
+  /**
+   * Specifies the order position of the spotlight
+   */
+  spotlightedOrderPosition?: number;
+};
+
 /**
  * Raised hand state with order
  *
@@ -39,11 +52,10 @@ export type RaisedHand = {
   raisedHandOrderPosition: number;
 };
 
-/* @conditional-compile-remove(reaction) */
 /**
  * Reaction state with reaction type to render
  *
- * @beta
+ * @public
  */
 export type Reaction = {
   /**
@@ -53,7 +65,7 @@ export type Reaction = {
   /**
    * Received timestamp for the message as default Date format.
    */
-  receivedAt: Date;
+  receivedOn: Date;
 };
 
 /**
@@ -80,4 +92,15 @@ export type ParticipantState =
   | 'Hold'
   | 'InLobby'
   | 'EarlyMedia'
-  | 'Disconnected';
+  | 'Disconnected'
+  | 'Reconnecting';
+
+/**
+ * Audio/Video Media access state
+ *
+ * @public
+ */
+export type MediaAccess = {
+  isAudioPermitted: boolean;
+  isVideoPermitted: boolean;
+};

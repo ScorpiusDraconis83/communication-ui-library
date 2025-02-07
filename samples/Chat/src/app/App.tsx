@@ -10,15 +10,14 @@ import { EndScreen } from './EndScreen';
 import { ErrorScreen } from './ErrorScreen';
 import HomeScreen from './HomeScreen';
 import { getExistingThreadIdFromURL } from './utils/getParametersFromURL';
-import { getBuildTime, getChatSDKVersion, getCommnicationReactSDKVersion } from './utils/utils';
+import { getBuildTime, getChatSDKVersion, getCommitID, getCommnicationReactSDKVersion } from './utils/utils';
 import { initializeFileTypeIcons } from '@fluentui/react-file-type-icons';
 
 setLogLevel('error');
 
-console.info(
-  `Thread chat sample using @azure/communication-chat : ${getChatSDKVersion()} and @azure/communication-react : ${getCommnicationReactSDKVersion()}`
+console.log(
+  `ACS sample chat app. Last Updated ${getBuildTime()} with CommitID:${getCommitID()} using @azure/communication-chat:${getChatSDKVersion()} and @azure/communication-react:${getCommnicationReactSDKVersion()}`
 );
-console.info(`Build Date : ${getBuildTime()}`);
 
 initializeIcons();
 initializeFileTypeIcons();
@@ -34,6 +33,8 @@ export default (): JSX.Element => {
   const [displayName, setDisplayName] = useState('');
   const [threadId, setThreadId] = useState('');
   const [endpointUrl, setEndpointUrl] = useState('');
+  /* @conditional-compile-remove(rich-text-editor-composite-support) */
+  const [isRichTextEditorEnabled, setIsRichTextEditorEnabled] = useState(true);
 
   const renderPage = (): JSX.Element => {
     switch (page) {
@@ -53,6 +54,8 @@ export default (): JSX.Element => {
             setDisplayName={setDisplayName}
             setThreadId={setThreadId}
             setEndpointUrl={setEndpointUrl}
+            /* @conditional-compile-remove(rich-text-editor-composite-support) */
+            setIsRichTextEditorEnabled={setIsRichTextEditorEnabled}
           />
         );
       }
@@ -73,6 +76,8 @@ export default (): JSX.Element => {
                   setPage('end');
                 }
               }}
+              /* @conditional-compile-remove(rich-text-editor-composite-support) */
+              isRichTextEditorEnabled={isRichTextEditorEnabled}
             />
           );
         }
@@ -87,7 +92,7 @@ export default (): JSX.Element => {
               setPage('chat'); // use stored information to attempt to rejoin the chat thread
             }}
             homeHandler={() => {
-              window.location.href = window.location.origin;
+              window.location.href = window.location.origin + window.location.pathname;
             }}
             userId={userId}
             displayName={displayName}
@@ -100,7 +105,7 @@ export default (): JSX.Element => {
           <ErrorScreen
             title={ERROR_PAGE_TITLE_REMOVED}
             homeHandler={() => {
-              window.location.href = window.location.origin;
+              window.location.href = window.location.origin + window.location.pathname;
             }}
           />
         );

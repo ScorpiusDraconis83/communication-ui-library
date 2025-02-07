@@ -2,10 +2,9 @@
 // Licensed under the MIT License.
 
 import React from 'react';
-import { useEffect } from 'react';
-import { _formatString } from '@internal/acs-ui-common';
-import parse, { HTMLReactParserOptions, Element as DOMElement, attributesToProps } from 'html-react-parser';
-
+import { AttachmentMetadata, _formatString } from '@internal/acs-ui-common';
+import parse, { HTMLReactParserOptions, Element as DOMElement } from 'html-react-parser';
+import { attributesToProps } from 'html-react-parser';
 import Linkify from 'react-linkify';
 import { ChatMessage } from '../../types/ChatMessage';
 /* @conditional-compile-remove(data-loss-prevention) */
@@ -17,20 +16,21 @@ import { MentionDisplayOptions, Mention } from '../MentionPopover';
 /* @conditional-compile-remove(data-loss-prevention) */
 import { FontIcon, Stack } from '@fluentui/react';
 import { MessageThreadStrings } from '../MessageThread';
-import { AttachmentMetadata } from '../FileDownloadCards';
 import LiveMessage from '../Announcer/LiveMessage';
 /* @conditional-compile-remove(mention) */
 import { defaultOnMentionRender } from './MentionRenderer';
 import DOMPurify from 'dompurify';
+import { _AttachmentDownloadCardsStrings } from '../Attachment/AttachmentDownloadCards';
+/* @conditional-compile-remove(data-loss-prevention) */
+import { dataLossIconStyle } from '../styles/MessageThread.styles';
+import { messageTextContentStyles } from '../styles/MessageThread.styles';
 
 type ChatMessageContentProps = {
   message: ChatMessage;
   strings: MessageThreadStrings;
   /* @conditional-compile-remove(mention) */
   mentionDisplayOptions?: MentionDisplayOptions;
-  attachmentsMap?: Record<string, string>;
-  onFetchAttachments?: (attachments: AttachmentMetadata[], messageId: string) => Promise<void>;
-  onInlineImageClicked?: (attachmentId: string) => void;
+  inlineImageOptions?: InlineImageOptions;
 };
 
 /* @conditional-compile-remove(data-loss-prevention) */
@@ -44,7 +44,35 @@ type MessageContentWithLiveAriaProps = {
   liveMessage: string;
   ariaLabel?: string;
   content: JSX.Element;
+  className?: string;
 };
+
+/**
+ * InlineImage's state, as reflected in the UI.
+ *
+ * @public
+ */
+export interface InlineImage {
+  /** ID of the message that the inline image is belonged to */
+  messageId: string;
+  /** Attributes of the inline image */
+  imageAttributes: React.ImgHTMLAttributes<HTMLImageElement>;
+}
+
+/**
+ * Options to display inline image in the inline image scenario.
+ *
+ * @public
+ */
+export interface InlineImageOptions {
+  /**
+   * Optional callback to render an inline image of in a message.
+   */
+  onRenderInlineImage?: (
+    inlineImage: InlineImage,
+    defaultOnRender: (inlineImage: InlineImage) => JSX.Element
+  ) => JSX.Element;
+}
 
 /** @private */
 export const ChatMessageContent = (props: ChatMessageContentProps): JSX.Element => {
@@ -63,7 +91,7 @@ export const ChatMessageContent = (props: ChatMessageContentProps): JSX.Element 
 
 const MessageContentWithLiveAria = (props: MessageContentWithLiveAriaProps): JSX.Element => {
   return (
-    <div data-ui-status={props.message.status} role="text" aria-label={props.ariaLabel}>
+    <div data-ui-status={props.message.status} role="text" aria-label={props.ariaLabel} className={props.className}>
       <LiveMessage message={props.liveMessage} ariaLive="polite" />
       {props.content}
     </div>
@@ -71,19 +99,6 @@ const MessageContentWithLiveAria = (props: MessageContentWithLiveAriaProps): JSX
 };
 
 const MessageContentAsRichTextHTML = (props: ChatMessageContentProps): JSX.Element => {
-  const { message, attachmentsMap, onFetchAttachments } = props;
-  useEffect(() => {
-    if (!attachmentsMap || !onFetchAttachments) {
-      return;
-    }
-    const attachments = message.inlineImages?.filter((inlinedImages) => {
-      return attachmentsMap[inlinedImages.id] === undefined;
-    });
-    if (attachments && attachments.length > 0) {
-      onFetchAttachments(attachments, message.messageId);
-    }
-  }, [message.inlineImages, message.messageId, onFetchAttachments, attachmentsMap]);
-
   return (
     <MessageContentWithLiveAria
       message={props.message}
@@ -100,6 +115,7 @@ const MessageContentAsText = (props: ChatMessageContentProps): JSX.Element => {
       message={props.message}
       liveMessage={generateLiveMessage(props)}
       ariaLabel={messageContentAriaText(props)}
+      className={messageTextContentStyles}
       content={
         <Linkify
           componentDecorator={(decoratedHref: string, decoratedText: string, key: number) => {
@@ -122,7 +138,7 @@ const MessageContentAsText = (props: ChatMessageContentProps): JSX.Element => {
  * @private
  */
 export const BlockedMessageContent = (props: BlockedMessageContentProps): JSX.Element => {
-  const Icon: JSX.Element = <FontIcon iconName={'DataLossPreventionProhibited'} />;
+  const Icon: JSX.Element = <FontIcon className={dataLossIconStyle} iconName={'DataLossPreventionProhibited'} />;
   const blockedMessage =
     props.message.warningText === undefined ? props.strings.blockedWarningText : props.message.warningText;
   const blockedMessageLink = props.message.link;
@@ -153,34 +169,100 @@ export const BlockedMessageContent = (props: BlockedMessageContentProps): JSX.El
   );
 };
 
-// https://stackoverflow.com/questions/28899298/extract-the-text-out-of-html-string-using-javascript
-const extractContent = (s: string): string => {
-  const span = document.createElement('span');
-  span.innerHTML = s;
-  return span.textContent || span.innerText;
+const extractContentForAllyMessage = (props: ChatMessageContentProps): string => {
+  if (props.message.content || props.message.attachments) {
+    // Replace all <img> tags with 'image' for aria.
+    const parsedContent = DOMPurify.sanitize(props.message.content ?? '', {
+      ALLOWED_TAGS: ['img'],
+      RETURN_DOM_FRAGMENT: true
+    });
+
+    parsedContent.childNodes.forEach((child) => {
+      if (child.nodeName.toLowerCase() !== 'img') {
+        return;
+      }
+      const imageTextNode = document.createElement('div');
+      imageTextNode.innerHTML = 'image ';
+      parsedContent.replaceChild(imageTextNode, child);
+    });
+
+    // Inject message attachment count for aria.
+    // this is only applying to file attachments not for inline images.
+    if (props.message.attachments && props.message.attachments.length > 0) {
+      const attachmentCardDescription = attachmentCardGroupDescription(props);
+      const attachmentTextNode = document.createElement('div');
+      attachmentTextNode.innerHTML = `${attachmentCardDescription}`;
+      parsedContent.appendChild(attachmentTextNode);
+    }
+
+    // Strip all html tags from the content for aria.
+    let message = DOMPurify.sanitize(parsedContent, { ALLOWED_TAGS: [] });
+    // decode HTML entities so that screen reader can read the content properly.
+    message = decodeEntities(message);
+    return message;
+  }
+  return '';
 };
 
 const generateLiveMessage = (props: ChatMessageContentProps): string => {
-  const liveAuthor = _formatString(props.strings.liveAuthorIntro, { author: `${props.message.senderDisplayName}` });
+  const messageContent = extractContentForAllyMessage(props);
 
-  return `${props.message.editedOn ? props.strings.editedTag : ''} ${
-    props.message.mine ? '' : liveAuthor
-  } ${extractContent(props.message.content || '')} `;
+  if (props.message.editedOn) {
+    const liveAuthor = _formatString(props.strings.editedMessageLiveAuthorIntro, {
+      author: `${props.message.senderDisplayName}`
+    });
+    return `${props.message.mine ? props.strings.editedMessageLocalUserLiveAuthorIntro : liveAuthor} ${messageContent}`;
+  } else {
+    const liveAuthor = _formatString(props.strings.liveAuthorIntro, {
+      author: `${props.message.senderDisplayName}`
+    });
+    return `${props.message.mine ? '' : liveAuthor} ${messageContent} `;
+  }
 };
 
 const messageContentAriaText = (props: ChatMessageContentProps): string | undefined => {
-  // Strip all html tags from the content for aria.
+  const message = extractContentForAllyMessage(props);
+  return props.message.mine
+    ? _formatString(props.strings.messageContentMineAriaText, {
+        status: props.message.status ?? '',
+        message: message
+      })
+    : _formatString(props.strings.messageContentAriaText, {
+        status: props.message.status ?? '',
+        author: `${props.message.senderDisplayName}`,
+        message: message
+      });
+};
 
-  return props.message.content
-    ? props.message.mine
-      ? _formatString(props.strings.messageContentMineAriaText, {
-          message: DOMPurify.sanitize(props.message.content, { ALLOWED_TAGS: [] })
-        })
-      : _formatString(props.strings.messageContentAriaText, {
-          author: `${props.message.senderDisplayName}`,
-          message: DOMPurify.sanitize(props.message.content, { ALLOWED_TAGS: [] })
-        })
-    : undefined;
+const attachmentCardGroupDescription = (props: ChatMessageContentProps): string => {
+  const attachments = props.message.attachments;
+  return getAttachmentCountLiveMessage(attachments ?? [], props.strings.attachmentCardGroupMessage);
+};
+
+/**
+ * @private
+ */
+export const getAttachmentCountLiveMessage = (
+  attachments: AttachmentMetadata[],
+  attachmentCardGroupMessage: string
+): string => {
+  if (attachments.length === 0) {
+    return '';
+  }
+  return _formatString(attachmentCardGroupMessage, {
+    attachmentCount: `${attachments.length}`
+  });
+};
+
+const defaultOnRenderInlineImage = (inlineImage: InlineImage): JSX.Element => {
+  return (
+    <img
+      key={inlineImage.imageAttributes.id}
+      tabIndex={0}
+      data-ui-id={inlineImage.imageAttributes.id}
+      {...inlineImage.imageAttributes}
+    />
+  );
 };
 
 const processHtmlToReact = (props: ChatMessageContentProps): JSX.Element => {
@@ -189,52 +271,37 @@ const processHtmlToReact = (props: ChatMessageContentProps): JSX.Element => {
       if (domNode instanceof DOMElement && domNode.attribs) {
         // Transform custom rendering of mentions
         /* @conditional-compile-remove(mention) */
-        if (props.mentionDisplayOptions?.onRenderMention && domNode.name === 'msft-mention') {
+        if (domNode.name === 'msft-mention' && domNode.attribs.id) {
           const { id } = domNode.attribs;
           const mention: Mention = {
             id: id,
             displayText: (domNode.children[0] as unknown as Text).nodeValue ?? ''
           };
-          return props.mentionDisplayOptions.onRenderMention(mention, defaultOnMentionRender);
+          if (props.mentionDisplayOptions?.onRenderMention) {
+            return props.mentionDisplayOptions.onRenderMention(mention, defaultOnMentionRender);
+          }
+          return defaultOnMentionRender(mention);
         }
 
         // Transform inline images
-        if (
-          domNode.name &&
-          domNode.name === 'img' &&
-          domNode.attribs &&
-          domNode.attribs.id &&
-          props.message.inlineImages?.find((metadata) => {
-            return metadata.id === domNode.attribs.id;
-          })
-        ) {
-          domNode.attribs['aria-label'] = domNode.attribs.name;
-          // logic to check id in map/list
-          if (props.attachmentsMap && domNode.attribs.id in props.attachmentsMap) {
-            domNode.attribs.src = props.attachmentsMap[domNode.attribs.id];
+        if (domNode.name && domNode.name === 'img' && domNode.attribs && domNode.attribs.id) {
+          if (domNode.attribs.name) {
+            domNode.attribs['aria-label'] = domNode.attribs.name;
           }
-          const handleOnClick = (): void => {
-            props.onInlineImageClicked && props.onInlineImageClicked(domNode.attribs.id);
-          };
           const imgProps = attributesToProps(domNode.attribs);
-          return (
-            <span
-              data-ui-id={domNode.attribs.id}
-              onClick={handleOnClick}
-              tabIndex={0}
-              role="button"
-              style={{
-                cursor: 'pointer'
-              }}
-              onKeyDown={(e) => {
-                if (e.key === 'Enter') {
-                  handleOnClick();
-                }
-              }}
-            >
-              <img {...imgProps} />
-            </span>
-          );
+          const inlineImageProps: InlineImage = { messageId: props.message.messageId, imageAttributes: imgProps };
+
+          return props.inlineImageOptions?.onRenderInlineImage
+            ? props.inlineImageOptions.onRenderInlineImage(inlineImageProps, defaultOnRenderInlineImage)
+            : defaultOnRenderInlineImage(inlineImageProps);
+        }
+
+        // Transform links to open in new tab
+        if (domNode.name === 'a' && React.isValidElement<React.AnchorHTMLAttributes<HTMLAnchorElement>>(reactNode)) {
+          return React.cloneElement(reactNode, {
+            target: '_blank',
+            rel: 'noreferrer noopener'
+          });
         }
       }
       // Pass through the original node
@@ -242,4 +309,33 @@ const processHtmlToReact = (props: ChatMessageContentProps): JSX.Element => {
     }
   };
   return <>{parse(props.message.content ?? '', options)}</>;
+};
+
+const decodeEntities = (encodedString: string): string => {
+  // This regular expression matches HTML entities.
+  const translate_re = /&(nbsp|amp|quot|lt|gt);/g;
+  // This object maps HTML entities to their respective characters.
+  const translate: Record<string, string> = {
+    nbsp: ' ',
+    amp: '&',
+    quot: '"',
+    lt: '<',
+    gt: '>'
+  };
+
+  return (
+    encodedString
+      // Find all matches of HTML entities defined in translate_re and
+      // replace them with the corresponding character from the translate object.
+      .replace(translate_re, function (match, entity) {
+        return translate[entity] ?? match;
+      })
+      // Find numeric entities (e.g., &#65;)
+      // and replace them with the equivalent character using the String.fromCharCode method,
+      // which converts Unicode values into characters.
+      .replace(/&#(\d+);/gi, function (match, numStr) {
+        const num = parseInt(numStr, 10);
+        return String.fromCharCode(num);
+      })
+  );
 };

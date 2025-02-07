@@ -83,8 +83,15 @@ export const ChatMessageActionFlyout = (props: ChatMessageActionFlyoutProps): JS
       key: person.displayName,
       text: person.displayName,
       itemProps: { styles: props.increaseFlyoutItemSize ? menuItemIncreasedSizeStyles : undefined },
-      onRenderIcon: () =>
-        onRenderAvatar ? onRenderAvatar(person.id ?? '', personaOptions) : <Persona {...personaOptions} />,
+      onRenderIcon: () => {
+        if (onRenderAvatar) {
+          const rendered = onRenderAvatar(person.id ?? '', personaOptions);
+          if (rendered) {
+            return rendered;
+          }
+        }
+        return <Persona {...personaOptions} />;
+      },
       iconProps: {
         styles: menuIconStyleSet
       }
@@ -95,7 +102,7 @@ export const ChatMessageActionFlyout = (props: ChatMessageActionFlyoutProps): JS
     const items: IContextualMenuItem[] = [
       {
         key: 'Edit',
-        'data-ui-id': 'chat-composite-message-contextual-menu-edit-action',
+        'data-testid': 'chat-composite-message-contextual-menu-edit-action',
         text: props.strings.editMessage,
         itemProps: {
           styles: props.increaseFlyoutItemSize ? menuItemIncreasedSizeStyles : undefined
@@ -105,6 +112,7 @@ export const ChatMessageActionFlyout = (props: ChatMessageActionFlyoutProps): JS
       },
       {
         key: 'Remove',
+        'data-testid': 'chat-composite-message-contextual-menu-remove-action',
         text: props.strings.removeMessage,
         itemProps: { styles: props.increaseFlyoutItemSize ? menuItemIncreasedSizeStyles : undefined },
         iconProps: {
@@ -114,12 +122,14 @@ export const ChatMessageActionFlyout = (props: ChatMessageActionFlyoutProps): JS
         onClick: props.onRemoveClick
       }
     ];
-    // only show read by x of x if more than 3 participants in total including myself
+    // only show read by x of y if more than 3 participants in total including myself
+    // only show read by x of y if less than 20 participants in total including myself. This is because read by is not supported for 20 or more participants.
     // TODO: change strings.messageReadCount to be required if we can fallback to our own en-us strings for anything that Contoso doesn't provide
     if (
       props.remoteParticipantsCount &&
       messageReadByCount !== undefined &&
       props.remoteParticipantsCount >= 2 &&
+      props.remoteParticipantsCount < 19 &&
       props.showMessageStatus &&
       props.strings.messageReadCount &&
       props.messageStatus !== 'failed'

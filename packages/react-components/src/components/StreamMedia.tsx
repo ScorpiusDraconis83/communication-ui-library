@@ -2,6 +2,8 @@
 // Licensed under the MIT License.
 
 import { mergeStyles, Spinner } from '@fluentui/react';
+/* @conditional-compile-remove(remote-ufd) */
+import { Stack } from '@fluentui/react';
 import React, { useEffect, useRef, useState } from 'react';
 import {
   invertedVideoInPipStyle,
@@ -10,6 +12,10 @@ import {
   loadingSpinnerContainer,
   loadSpinnerStyles
 } from './styles/StreamMedia.styles';
+/* @conditional-compile-remove(remote-ufd) */
+import { reconnectingContainer, reconnectSpinnerStyles } from './styles/StreamMedia.styles';
+/* @conditional-compile-remove(remote-ufd) */
+import { useLocale } from '../localization';
 import { useTheme } from '../theming';
 import { BaseCustomStyles } from '../types';
 
@@ -17,7 +23,7 @@ import { BaseCustomStyles } from '../types';
  * Whether the stream is loading or not.
  * @public
  */
-export type LoadingState = 'loading' | 'none';
+export type LoadingState = 'loading' | 'none' | 'reconnecting';
 
 /**
  * Props for {@link StreamMedia}.
@@ -51,6 +57,8 @@ export interface StreamMediaProps {
 export const StreamMedia = (props: StreamMediaProps): JSX.Element => {
   const containerEl = useRef<HTMLDivElement>(null);
   const theme = useTheme();
+  /* @conditional-compile-remove(remote-ufd) */
+  const reconnectingText = useLocale().strings.videoTile.participantReconnecting || 'Reconnecting...';
 
   const { isMirrored, videoStreamElement, styles, loadingState = 'none' } = props;
   const [pipEnabled, setPipEnabled] = useState(false);
@@ -97,6 +105,18 @@ export const StreamMedia = (props: StreamMediaProps): JSX.Element => {
           <Spinner data-ui-id="stream-media-loading-spinner" styles={loadSpinnerStyles} />
         </div>
       )}
+      {
+        /* @conditional-compile-remove(remote-ufd) */
+        loadingState === 'reconnecting' && (
+          <Stack className={reconnectingContainer()}>
+            <Spinner
+              data-ui-id="stream-media-loading-spinner"
+              styles={reconnectSpinnerStyles()}
+              label={reconnectingText}
+            />
+          </Stack>
+        )
+      }
     </div>
   );
 };

@@ -30,18 +30,14 @@ export class RemoteVideoStreamSubscriber {
 
   private subscribe = (): void => {
     this._remoteVideoStream.on('isAvailableChanged', this.isAvailableChanged);
-    /* @conditional-compile-remove(video-stream-is-receiving-flag) */
     this._remoteVideoStream.on('isReceivingChanged', this.isReceivingChanged);
-    /* @conditional-compile-remove(pinned-participants) */
     this._remoteVideoStream.on('sizeChanged', this.isSizeChanged);
     this.checkAndUpdateScreenShareState();
   };
 
   public unsubscribe = (): void => {
     this._remoteVideoStream.off('isAvailableChanged', this.isAvailableChanged);
-    /* @conditional-compile-remove(video-stream-is-receiving-flag) */
     this._remoteVideoStream.off('isReceivingChanged', this.isReceivingChanged);
-    /* @conditional-compile-remove(pinned-participants) */
     this._remoteVideoStream.off('sizeChanged', this.isSizeChanged);
   };
 
@@ -107,7 +103,6 @@ export class RemoteVideoStreamSubscriber {
     this.checkAndUpdateScreenShareState();
   };
 
-  /* @conditional-compile-remove(video-stream-is-receiving-flag) */
   private isReceivingChanged = (): void => {
     this._context.setRemoteVideoStreamIsReceiving(
       this._callIdRef.callId,
@@ -117,7 +112,6 @@ export class RemoteVideoStreamSubscriber {
     );
   };
 
-  /* @conditional-compile-remove(pinned-participants) */
   private isSizeChanged = (): void => {
     if (this._remoteVideoStream?.size.width === 0 && this._remoteVideoStream?.size.height === 0) {
       return;

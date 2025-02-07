@@ -1,25 +1,15 @@
 // Copyright (c) Microsoft Corporation.
 // Licensed under the MIT License.
 
-import { initializeIcons, registerIcons } from '@fluentui/react';
 import React from 'react';
 import { VideoTile } from './VideoTile';
 import { act, fireEvent, render } from '@testing-library/react';
-/* @conditional-compile-remove(pinned-participants) */
+
 import { screen } from '@testing-library/react';
-/* @conditional-compile-remove(pinned-participants) */
+
 import { VideoTileProps } from './VideoTile';
 
 describe('VideoTile', () => {
-  beforeAll(() => {
-    initializeIcons();
-    registerIcons({
-      icons: {
-        videotilemoreoptions: <></>
-      }
-    });
-  });
-
   test('onLongTouch should trigger callback', async () => {
     const mockCallback = jest.fn();
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -35,11 +25,9 @@ describe('VideoTile', () => {
       fireEvent.touchEnd(videoTile);
     });
 
-    /* @conditional-compile-remove(pinned-participants) */
     expect(mockCallback).toBeCalledTimes(1);
   });
 
-  /* @conditional-compile-remove(pinned-participants) */
   test('VideoTile does not show more button when contextualMenu is undefined', async () => {
     const { rerender, container } = render(<VideoTile />);
 

@@ -3,55 +3,58 @@
 
 import { IContextualMenuItem } from '@fluentui/react';
 import { ControlBarButtonProps } from '@internal/react-components';
-/* @conditional-compile-remove(gallery-layouts) */
+/* @conditional-compile-remove(rtt) */
+import { CaptionsBanner } from '@internal/react-components';
 import { VideoGalleryLayout } from '@internal/react-components';
-/* @conditional-compile-remove(close-captions) */
-import { _StartCaptionsButton } from '@internal/react-components';
-/*@conditional-compile-remove(PSTN-calls) */ /* @conditional-compile-remove(one-to-n-calling) */
 import { HoldButton } from '@internal/react-components';
+import { StartCaptionsButton } from '@internal/react-components';
 import React from 'react';
-/* @conditional-compile-remove(gallery-layouts) */
 import { useState } from 'react';
-/*@conditional-compile-remove(PSTN-calls) */ /* @conditional-compile-remove(one-to-n-calling) */ /* @conditional-compile-remove(close-captions) */
 import { useMemo, useCallback } from 'react';
-/*@conditional-compile-remove(PSTN-calls) */ /* @conditional-compile-remove(one-to-n-calling) */
 import { usePropsFor } from '../../CallComposite/hooks/usePropsFor';
-/*@conditional-compile-remove(PSTN-calls) */ /* @conditional-compile-remove(one-to-n-calling) */ /* @conditional-compile-remove(close-captions) */
 import { buttonFlyoutIncreasedSizeStyles } from '../../CallComposite/styles/Buttons.styles';
 import { MoreButton } from '../MoreButton';
-/*@conditional-compile-remove(PSTN-calls) */ /* @conditional-compile-remove(one-to-n-calling) */ /* @conditional-compile-remove(close-captions) */
 import { useLocale } from '../../localization';
-/* @conditional-compile-remove(control-bar-button-injection) */
 import { CommonCallControlOptions } from '../types/CommonCallControlOptions';
-/* @conditional-compile-remove(control-bar-button-injection) */
 import {
   CUSTOM_BUTTON_OPTIONS,
   generateCustomCallDesktopOverflowButtons,
   onFetchCustomButtonPropsTrampoline
 } from './CustomButton';
-/* @conditional-compile-remove(close-captions) */
-import { useHandlers } from '../../CallComposite/hooks/useHandlers';
-/* @conditional-compile-remove(close-captions) */
-import { _startCaptionsButtonSelector } from '@internal/calling-component-bindings';
-/* @conditional-compile-remove(close-captions) */
-import { useAdaptedSelector } from '../../CallComposite/hooks/useAdaptedSelector';
 import { _preventDismissOnEvent } from '@internal/acs-ui-common';
+import { showDtmfDialer } from '../../CallComposite/utils/MediaGalleryUtils';
+import { useSelector } from '../../CallComposite/hooks/useSelector';
+import { getTargetCallees } from '../../CallComposite/selectors/baseSelectors';
+/* @conditional-compile-remove(together-mode) */
+import {
+  getIsTogetherModeActive,
+  getCapabilites,
+  getLocalUserId,
+  getIsTeamsCall
+} from '../../CallComposite/selectors/baseSelectors';
+import { getTeamsMeetingCoordinates, getIsTeamsMeeting } from '../../CallComposite/selectors/baseSelectors';
+import { CallControlOptions } from '../../CallComposite';
 
 /** @private */
 export interface DesktopMoreButtonProps extends ControlBarButtonProps {
   disableButtonsForHoldScreen?: boolean;
   onClickShowDialpad?: () => void;
-  /* @conditional-compile-remove(close-captions) */
   isCaptionsSupported?: boolean;
-  /* @conditional-compile-remove(control-bar-button-injection) */
+  /* @conditional-compile-remove(rtt) */
+  isRealTimeTextSupported?: boolean;
   callControls?: boolean | CommonCallControlOptions;
   onCaptionsSettingsClick?: () => void;
-  /* @conditional-compile-remove(gallery-layouts) */
+  /* @conditional-compile-remove(rtt) */
+  onStartRealTimeTextClick?: () => void;
+  /* @conditional-compile-remove(rtt) */
+  startRealTimeTextButtonChecked?: boolean;
   onUserSetOverflowGalleryPositionChange?: (position: 'Responsive' | 'horizontalTop') => void;
-  /* @conditional-compile-remove(gallery-layouts) */
   onUserSetGalleryLayout?: (layout: VideoGalleryLayout) => void;
-  /* @conditional-compile-remove(gallery-layouts) */
   userSetGalleryLayout?: VideoGalleryLayout;
+  onSetDialpadPage?: () => void;
+  dtmfDialerPresent?: boolean;
+  teamsMeetingPhoneCallEnable?: boolean;
+  onMeetingPhoneInfoClick?: () => void;
 }
 
 /**
@@ -59,31 +62,40 @@ export interface DesktopMoreButtonProps extends ControlBarButtonProps {
  * @private
  */
 export const DesktopMoreButton = (props: DesktopMoreButtonProps): JSX.Element => {
-  /*@conditional-compile-remove(PSTN-calls) */ /* @conditional-compile-remove(one-to-n-calling) */ /* @conditional-compile-remove(close-captions) */
   const localeStrings = useLocale();
-  /*@conditional-compile-remove(PSTN-calls) */ /* @conditional-compile-remove(one-to-n-calling) */
   const holdButtonProps = usePropsFor(HoldButton);
-  /* @conditional-compile-remove(close-captions) */
-  const startCaptionsButtonProps = useAdaptedSelector(_startCaptionsButtonSelector);
-  /* @conditional-compile-remove(close-captions) */
-  const startCaptionsButtonHandlers = useHandlers(_StartCaptionsButton);
-  /* @conditional-compile-remove(close-captions) */
+  const startCaptionsButtonProps = usePropsFor(StartCaptionsButton);
+  /* @conditional-compile-remove(rtt) */
+  const realTimeTextProps = usePropsFor(CaptionsBanner);
   const startCaptions = useCallback(async () => {
-    await startCaptionsButtonHandlers.onStartCaptions({
+    await startCaptionsButtonProps.onStartCaptions({
       spokenLanguage: startCaptionsButtonProps.currentSpokenLanguage
     });
-  }, [startCaptionsButtonHandlers, startCaptionsButtonProps.currentSpokenLanguage]);
+  }, [startCaptionsButtonProps]);
 
   /* @conditional-compile-remove(overflow-top-composite) */
   const [galleryPositionTop, setGalleryPositionTop] = useState<boolean>(false);
-  /* @conditional-compile-remove(gallery-layouts) */
   const [focusedContentOn, setFocusedContentOn] = useState<boolean>(false);
-  /* @conditional-compile-remove(gallery-layouts) */
   const [previousLayout, setPreviousLayout] = useState<VideoGalleryLayout>(
     props.userSetGalleryLayout ?? 'floatingLocalVideo'
   );
 
-  /* @conditional-compile-remove(PSTN-calls) */ /* @conditional-compile-remove(one-to-n-calling) */ /* @conditional-compile-remove(close-captions) */
+  const callees = useSelector(getTargetCallees);
+  const allowDtmfDialer = showDtmfDialer(callees);
+
+  const isTeamsMeeting = useSelector(getIsTeamsMeeting);
+  const teamsMeetingCoordinates = useSelector(getTeamsMeetingCoordinates);
+  /* @conditional-compile-remove(together-mode) */
+  const isTogetherModeActive = useSelector(getIsTogetherModeActive);
+  /* @conditional-compile-remove(together-mode) */
+  const participantCapability = useSelector(getCapabilites);
+  /* @conditional-compile-remove(together-mode) */
+  const participantId = useSelector(getLocalUserId);
+  /* @conditional-compile-remove(together-mode) */
+  const isTeamsCall = useSelector(getIsTeamsCall);
+
+  const [dtmfDialerChecked, setDtmfDialerChecked] = useState<boolean>(props.dtmfDialerPresent ?? false);
+
   const moreButtonStrings = useMemo(
     () => ({
       label: localeStrings.strings.call.moreButtonCallingLabel,
@@ -94,7 +106,6 @@ export const DesktopMoreButton = (props: DesktopMoreButtonProps): JSX.Element =>
 
   const moreButtonContextualMenuItems: IContextualMenuItem[] = [];
 
-  /* @conditional-compile-remove(close-captions) */ /* @conditional-compile-remove(gallery-layouts) */
   const menuSubIconStyleSet = {
     root: {
       height: 'unset',
@@ -103,22 +114,22 @@ export const DesktopMoreButton = (props: DesktopMoreButtonProps): JSX.Element =>
     }
   };
 
-  /*@conditional-compile-remove(PSTN-calls) */ /* @conditional-compile-remove(one-to-n-calling) */
-  moreButtonContextualMenuItems.push({
-    key: 'holdButtonKey',
-    text: localeStrings.component.strings.holdButton.tooltipOffContent,
-    onClick: () => {
-      holdButtonProps.onToggleHold();
-    },
-    iconProps: { iconName: 'HoldCallContextualMenuItem', styles: { root: { lineHeight: 0 } } },
-    itemProps: {
-      styles: buttonFlyoutIncreasedSizeStyles
-    },
-    disabled: props.disableButtonsForHoldScreen
-  });
+  if (props.callControls === true || (props.callControls as CallControlOptions)?.holdButton !== false) {
+    moreButtonContextualMenuItems.push({
+      key: 'holdButtonKey',
+      text: localeStrings.component.strings.holdButton.tooltipOffContent,
+      onClick: () => {
+        holdButtonProps.onToggleHold();
+      },
+      iconProps: { iconName: 'HoldCallContextualMenuItem', styles: { root: { lineHeight: 0 } } },
+      itemProps: {
+        styles: buttonFlyoutIncreasedSizeStyles
+      },
+      disabled: props.disableButtonsForHoldScreen
+    });
+  }
 
   // is captions feature is active
-  /* @conditional-compile-remove(close-captions) */
   if (props.isCaptionsSupported) {
     const captionsContextualMenuItems: IContextualMenuItem[] = [];
 
@@ -152,10 +163,10 @@ export const DesktopMoreButton = (props: DesktopMoreButtonProps): JSX.Element =>
         : localeStrings.strings.call.startCaptionsButtonTooltipOffContent,
       onClick: () => {
         startCaptionsButtonProps.checked
-          ? startCaptionsButtonHandlers.onStopCaptions()
+          ? startCaptionsButtonProps.onStopCaptions()
           : startCaptionsButtonProps.currentSpokenLanguage !== ''
-          ? startCaptions()
-          : props.onCaptionsSettingsClick && props.onCaptionsSettingsClick();
+            ? startCaptions()
+            : props.onCaptionsSettingsClick && props.onCaptionsSettingsClick();
       },
       iconProps: {
         iconName: startCaptionsButtonProps.checked ? 'CaptionsOffIcon' : 'CaptionsIcon',
@@ -185,23 +196,101 @@ export const DesktopMoreButton = (props: DesktopMoreButtonProps): JSX.Element =>
     }
   }
 
-  /*@conditional-compile-remove(PSTN-calls) */
-  if (props.onClickShowDialpad) {
+  //RTT
+  /* @conditional-compile-remove(rtt) */
+  if (props.isRealTimeTextSupported) {
+    const realTimeTextContextualMenuItems: IContextualMenuItem[] = [];
+    const rttDisabled =
+      props.disableButtonsForHoldScreen || realTimeTextProps.isRealTimeTextOn || props.startRealTimeTextButtonChecked;
+
     moreButtonContextualMenuItems.push({
-      key: 'showDialpadKey',
-      text: localeStrings.strings.callWithChat.openDtmfDialpadLabel,
-      onClick: () => {
-        props.onClickShowDialpad && props.onClickShowDialpad();
-      },
-      iconProps: { iconName: 'Dialpad', styles: { root: { lineHeight: 0 } } },
+      key: 'realTimeTextKey',
+      id: 'common-call-composite-captions-button',
+      text: localeStrings.strings.call.realTimeTextLabel,
+      iconProps: { iconName: 'RealTimeTextIcon', styles: { root: { lineHeight: 0 } } },
       itemProps: {
         styles: buttonFlyoutIncreasedSizeStyles
       },
-      disabled: props.disableButtonsForHoldScreen
+      disabled: props.disableButtonsForHoldScreen,
+      subMenuProps: {
+        id: 'rtt-contextual-menu',
+        items: realTimeTextContextualMenuItems,
+        calloutProps: {
+          preventDismissOnEvent: _preventDismissOnEvent
+        }
+      },
+      submenuIconProps: {
+        iconName: 'HorizontalGalleryRightButton',
+        styles: menuSubIconStyleSet
+      }
+    });
+
+    realTimeTextContextualMenuItems.push({
+      key: 'StartRealTimeTextKey',
+      id: 'common-call-composite-rtt-start-button',
+      text: localeStrings.strings.call.startRealTimeTextLabel,
+      ariaLabel: rttDisabled
+        ? localeStrings.strings.call.disabledStartRealTimeTextLabel
+        : localeStrings.strings.call.startRealTimeTextLabel,
+      onClick: props.onStartRealTimeTextClick,
+      iconProps: {
+        iconName: 'RealTimeTextIcon',
+        styles: { root: { lineHeight: 0 } }
+      },
+      itemProps: {
+        styles: buttonFlyoutIncreasedSizeStyles
+      },
+      disabled: rttDisabled
     });
   }
 
-  /* @conditional-compile-remove(gallery-layouts) */
+  const dtmfDialerScreenOption = {
+    key: 'dtmfDialerScreenKey',
+    itemProps: {
+      styles: buttonFlyoutIncreasedSizeStyles
+    },
+    text: !dtmfDialerChecked
+      ? localeStrings.strings.call.dtmfDialerMoreButtonLabelOn
+      : localeStrings.strings.call.dtmfDialerMoreButtonLabelOff,
+    onClick: () => {
+      props.onSetDialpadPage && props.onSetDialpadPage();
+      setDtmfDialerChecked(!dtmfDialerChecked);
+    },
+    iconProps: {
+      iconName: 'DtmfDialpadButton',
+      styles: { root: { lineHeight: 0 } }
+    }
+  };
+  /**
+   * Only render the dtmf dialer if the dialpad for PSTN calls is not present
+   */
+  if (props.onSetDialpadPage && allowDtmfDialer) {
+    if (props.callControls === true || (props.callControls as CallControlOptions)?.dtmfDialerButton !== false) {
+      moreButtonContextualMenuItems.push(dtmfDialerScreenOption);
+    }
+  }
+
+  const joinByPhoneOption = {
+    key: 'phoneCallKey',
+    itemProps: {
+      styles: buttonFlyoutIncreasedSizeStyles
+    },
+    text: localeStrings.strings.call.phoneCallMoreButtonLabel,
+    onClick: () => {
+      props.onMeetingPhoneInfoClick && props.onMeetingPhoneInfoClick();
+    },
+    iconProps: {
+      iconName: 'PhoneNumberButton',
+      styles: { root: { lineHeight: 0 } }
+    }
+  };
+  /**
+   * Only render the phone call button if meeting conordinates are present
+   */
+  if (props.teamsMeetingPhoneCallEnable && isTeamsMeeting && teamsMeetingCoordinates) {
+    moreButtonContextualMenuItems.push(joinByPhoneOption);
+  }
+
   if (props.onUserSetOverflowGalleryPositionChange) {
     const galleryOptions = {
       key: 'overflowGalleryPositionKey',
@@ -320,6 +409,29 @@ export const DesktopMoreButton = (props: DesktopMoreButtonProps): JSX.Element =>
       }
     };
 
+    /* @conditional-compile-remove(together-mode) */
+    const togetherModeOption = {
+      key: 'togetherModeSelectionKey',
+      text: localeStrings.strings.call.moreButtonTogetherModeLayoutLabel,
+      canCheck: true,
+      itemProps: {
+        styles: buttonFlyoutIncreasedSizeStyles
+      },
+      isChecked: props.userSetGalleryLayout === 'togetherMode',
+      onClick: () => {
+        props.onUserSetGalleryLayout && props.onUserSetGalleryLayout('togetherMode');
+        setFocusedContentOn(false);
+      },
+      disabled: !(
+        (participantId?.kind === 'microsoftTeamsUser' && participantCapability?.startTogetherMode?.isPresent) ||
+        isTogetherModeActive
+      ),
+      iconProps: {
+        iconName: 'TogetherModeLayout',
+        styles: { root: { lineHeight: 0 } }
+      }
+    };
+
     /* @conditional-compile-remove(overflow-top-composite) */
     const overflowGalleryOption = {
       key: 'topKey',
@@ -350,11 +462,15 @@ export const DesktopMoreButton = (props: DesktopMoreButtonProps): JSX.Element =>
     galleryOptions.subMenuProps?.items?.push(galleryOption);
     /* @conditional-compile-remove(overflow-top-composite) */
     galleryOptions.subMenuProps?.items?.push(overflowGalleryOption);
-    /* @conditional-compile-remove(gallery-layouts) */
-    moreButtonContextualMenuItems.push(galleryOptions);
+    /* @conditional-compile-remove(together-mode) */
+    if (isTeamsCall || isTeamsMeeting) {
+      galleryOptions.subMenuProps?.items?.push(togetherModeOption);
+    }
+    if (props.callControls === true || (props.callControls as CallControlOptions)?.galleryControlsButton !== false) {
+      moreButtonContextualMenuItems.push(galleryOptions);
+    }
   }
 
-  /* @conditional-compile-remove(control-bar-button-injection) */
   const customDrawerButtons = useMemo(
     () =>
       generateCustomCallDesktopOverflowButtons(
@@ -364,7 +480,6 @@ export const DesktopMoreButton = (props: DesktopMoreButtonProps): JSX.Element =>
     [props.callControls]
   );
 
-  /* @conditional-compile-remove(control-bar-button-injection) */
   customDrawerButtons['primary'].slice(CUSTOM_BUTTON_OPTIONS.MAX_PRIMARY_DESKTOP_CUSTOM_BUTTONS).forEach((element) => {
     moreButtonContextualMenuItems.push({
       itemProps: {
@@ -373,7 +488,7 @@ export const DesktopMoreButton = (props: DesktopMoreButtonProps): JSX.Element =>
       ...element
     });
   });
-  /* @conditional-compile-remove(control-bar-button-injection) */
+
   customDrawerButtons['secondary']
     .slice(CUSTOM_BUTTON_OPTIONS.MAX_SECONDARY_DESKTOP_CUSTOM_BUTTONS)
     .forEach((element) => {
@@ -385,7 +500,6 @@ export const DesktopMoreButton = (props: DesktopMoreButtonProps): JSX.Element =>
       });
     });
 
-  /* @conditional-compile-remove(control-bar-button-injection) */
   customDrawerButtons['overflow'].forEach((element) => {
     moreButtonContextualMenuItems.push({
       itemProps: {
@@ -399,10 +513,10 @@ export const DesktopMoreButton = (props: DesktopMoreButtonProps): JSX.Element =>
     <MoreButton
       {...props}
       data-ui-id="common-call-composite-more-button"
-      /*@conditional-compile-remove(PSTN-calls) */ /* @conditional-compile-remove(one-to-n-calling) */ /* @conditional-compile-remove(close-captions) */
       strings={moreButtonStrings}
       menuIconProps={{ hidden: true }}
       menuProps={{
+        shouldFocusOnContainer: false,
         items: moreButtonContextualMenuItems,
         calloutProps: {
           preventDismissOnEvent: _preventDismissOnEvent

@@ -24,7 +24,7 @@ describe('useOrganizedParticipants hook tests', () => {
     const pinnedParticipantsLayout = setup({
       remoteParticipants,
       dominantSpeakers: ['3', '4'],
-      maxRemoteVideoStreams: 4
+      maxGridParticipants: 4
     });
 
     expect(pinnedParticipantsLayout?.gridParticipants.map((p) => p.userId)).toStrictEqual(['3', '4', '0', '1']);
@@ -46,12 +46,12 @@ describe('useOrganizedParticipants hook tests', () => {
     const pinnedParticipantsLayout = setup(
       {
         remoteParticipants,
-        maxRemoteVideoStreams: 4
+        maxGridParticipants: 4
       },
       {
         remoteParticipants,
         dominantSpeakers: ['4v', '5v'],
-        maxRemoteVideoStreams: 4
+        maxGridParticipants: 4
       }
     );
 
@@ -81,7 +81,7 @@ describe('useOrganizedParticipants hook tests', () => {
       const pinnedParticipantsLayout = setup({
         remoteParticipants,
         dominantSpeakers: ['3', '4'],
-        maxRemoteVideoStreams: 4,
+        maxGridParticipants: 4,
         isScreenShareActive: true
       });
 
@@ -109,14 +109,14 @@ describe('useOrganizedParticipants hook tests', () => {
     const layout = setup(
       {
         remoteParticipants,
-        maxRemoteVideoStreams: 4,
+        maxGridParticipants: 4,
         maxOverflowGalleryDominantSpeakers: 3,
         isScreenShareActive: true
       },
       {
         remoteParticipants,
         dominantSpeakers: ['3'],
-        maxRemoteVideoStreams: 4,
+        maxGridParticipants: 4,
         maxOverflowGalleryDominantSpeakers: 3,
         isScreenShareActive: true
       }
@@ -138,7 +138,6 @@ describe('useOrganizedParticipants hook tests', () => {
   });
 });
 
-/* @conditional-compile-remove(pinned-participants) */
 describe('useOrganizedParticipants hook tests with pinned participants', () => {
   test('pinned participants should in grid and video participants should be at the start of overflow gallery', () => {
     // 10 remote participants. First 5 with their video on.
@@ -153,7 +152,7 @@ describe('useOrganizedParticipants hook tests with pinned participants', () => {
       remoteParticipants,
       pinnedParticipantUserIds: ['0', '6'],
       dominantSpeakers: ['3', '4'],
-      maxRemoteVideoStreams: 4
+      maxGridParticipants: 4
     });
 
     expect(pinnedParticipantsLayout?.gridParticipants.map((p) => p.userId)).toStrictEqual(['0', '6']);
@@ -185,7 +184,7 @@ describe('useOrganizedParticipants hook tests with pinned participants', () => {
         remoteParticipants,
         pinnedParticipantUserIds: ['0', '6'],
         dominantSpeakers: ['3', '4'],
-        maxRemoteVideoStreams: 4,
+        maxGridParticipants: 4,
         isScreenShareActive: true
       });
 
@@ -214,13 +213,13 @@ describe('useOrganizedParticipants hook tests with pinned participants', () => {
       {
         remoteParticipants,
         dominantSpeakers: ['3v', '4v'],
-        maxRemoteVideoStreams: 4,
+        maxGridParticipants: 4,
         maxOverflowGalleryDominantSpeakers: 3
       },
       {
         remoteParticipants,
         dominantSpeakers: ['3v', '4v'],
-        maxRemoteVideoStreams: 4,
+        maxGridParticipants: 4,
         maxOverflowGalleryDominantSpeakers: 3,
         pinnedParticipantUserIds: ['1']
       }
@@ -249,14 +248,14 @@ describe('useOrganizedParticipants hook tests with pinned participants', () => {
       {
         remoteParticipants,
         pinnedParticipantUserIds: ['1'],
-        maxRemoteVideoStreams: 4,
+        maxGridParticipants: 4,
         maxOverflowGalleryDominantSpeakers: 3,
         isScreenShareActive: true
       },
       {
         remoteParticipants,
         pinnedParticipantUserIds: ['1'],
-        maxRemoteVideoStreams: 4,
+        maxGridParticipants: 4,
         maxOverflowGalleryDominantSpeakers: 3,
         isScreenShareActive: true,
         dominantSpeakers: ['3v', '4v']

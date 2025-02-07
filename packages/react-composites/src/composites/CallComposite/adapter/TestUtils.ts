@@ -14,20 +14,20 @@ import {
   RemoteParticipant
 } from '@azure/communication-calling';
 import { Mutable } from '../../CallWithChatComposite/adapter/TestUtils';
-import EventEmitter from 'events';
+import { EventEmitter } from 'events';
 
 /**
  * @private
  */
 export interface MockEmitter {
   emitter: EventEmitter;
-  emit(event: any, data?: any);
+  emit(event: any, data?: any): void;
 }
 /**
  * @private
  */
 export interface MockCall extends Mutable<CallCommon>, MockEmitter {
-  testHelperPushRemoteParticipant(participant: RemoteParticipant);
+  testHelperPushRemoteParticipant(participant: RemoteParticipant): void;
   testHelperPopRemoteParticipant(): RemoteParticipant;
   testHelperPushLocalVideoStream(stream: LocalVideoStream): void;
   testHelperPopLocalVideoStream(): LocalVideoStream;
@@ -41,9 +41,8 @@ export interface MockCall extends Mutable<CallCommon>, MockEmitter {
 export function createMockCall(mockCallId = 'defaultCallID'): MockCall {
   return addMockEmitter({
     id: mockCallId,
-    /* @conditional-compile-remove(teams-identity-support) */
+
     kind: 'Call',
-    /* @conditional-compile-remove(close-captions) */
     info: {
       groupId: 'testGroupId'
     },

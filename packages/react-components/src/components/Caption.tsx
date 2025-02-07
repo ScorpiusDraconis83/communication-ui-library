@@ -3,7 +3,6 @@
 
 import { IPersona, Persona, Stack, PersonaSize, Text } from '@fluentui/react';
 import React from 'react';
-import { _FileUploadCardsStrings } from './FileUploadCards';
 import { OnRenderAvatarCallback } from '../types';
 import {
   captionClassName,
@@ -12,13 +11,13 @@ import {
   displayNameContainerClassName,
   iconClassName
 } from './styles/Captions.style';
-import { _CaptionsInfo } from './CaptionsBanner';
+import { CaptionsInformation } from './CaptionsBanner';
 
 /**
  * @internal
  * Props for a single line of caption.
  */
-export interface _CaptionProps extends _CaptionsInfo {
+export interface _CaptionProps extends CaptionsInformation {
   /**
    * Optional callback to override render of the avatar.
    *

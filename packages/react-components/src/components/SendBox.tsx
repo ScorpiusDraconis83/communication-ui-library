@@ -4,22 +4,40 @@
 import React, { useState, useMemo, useCallback } from 'react';
 import { IStyle, ITextField, mergeStyles, concatStyleSets, Icon, Stack } from '@fluentui/react';
 import { sendButtonStyle, sendIconStyle, sendBoxWrapperStyles, borderAndBoxShadowStyle } from './styles/SendBox.styles';
+/* @conditional-compile-remove(file-sharing-acs) */
+import { useV9CustomStyles } from './styles/SendBox.styles';
 import { BaseCustomStyles } from '../types';
 import { useTheme } from '../theming';
 import { useLocale } from '../localization';
 import { useIdentifiers } from '../identifiers';
-import { InputBoxButton, InputBoxComponent } from './InputBoxComponent';
+import { InputBoxComponent } from './InputBoxComponent';
+import { InputBoxButton } from './InputBoxButton';
+/* @conditional-compile-remove(file-sharing-acs) */
 import { SendBoxErrors } from './SendBoxErrors';
-/* @conditional-compile-remove(file-sharing) */
-import { _FileUploadCards } from './FileUploadCards';
-/* @conditional-compile-remove(file-sharing) */
-import { fileUploadCardsStyles } from './styles/SendBox.styles';
+/* @conditional-compile-remove(file-sharing-acs) */
+import { _AttachmentUploadCards } from './Attachment/AttachmentUploadCards';
+/* @conditional-compile-remove(file-sharing-acs) */
+import { AttachmentMetadataInProgress, MessageOptions } from '@internal/acs-ui-common';
+/* @conditional-compile-remove(file-sharing-acs) */
+import { attachmentUploadCardsStyles } from './styles/SendBox.styles';
+/* @conditional-compile-remove(file-sharing-acs) */
 import { SendBoxErrorBarError } from './SendBoxErrorBar';
+/* @conditional-compile-remove(file-sharing-acs) */
+import {
+  isAttachmentUploadCompleted,
+  hasIncompleteAttachmentUploads,
+  toAttachmentMetadata
+} from './utils/SendBoxUtils';
+import {
+  MAXIMUM_LENGTH_OF_MESSAGE,
+  isMessageTooLong,
+  sanitizeText,
+  isSendBoxButtonDisabled
+} from './utils/SendBoxUtils';
 /* @conditional-compile-remove(mention) */
 import { MentionLookupOptions } from './MentionPopover';
-
-const EMPTY_MESSAGE_REGEX = /^\s*$/;
-const MAXIMUM_LENGTH_OF_MESSAGE = 8000;
+/* @conditional-compile-remove(file-sharing-acs) */
+import { FluentV9ThemeProvider } from '../theming/FluentV9ThemeProvider';
 
 /**
  * Fluent styles for {@link Sendbox}.
@@ -40,42 +58,6 @@ export interface SendBoxStylesProps extends BaseCustomStyles {
 }
 
 /**
- * Attributes required for SendBox to show file uploads like name, progress etc.
- * @beta
- */
-export interface ActiveFileUpload {
-  /**
-   * Unique identifier for the file upload.
-   */
-  id: string;
-
-  /**
-   * File name to be rendered for uploaded file.
-   */
-  filename: string;
-
-  /**
-   * A number between 0 and 1 indicating the progress of the upload.
-   * This is unrelated to the `uploadComplete` property.
-   * It is only used to show the progress of the upload.
-   * Progress of 1 doesn't mark the upload as complete, set the `uploadComplete`
-   * property to true to mark the upload as complete.
-   */
-  progress: number;
-
-  /**
-   * Error to be displayed to the user if the upload fails.
-   */
-  error?: SendBoxErrorBarError;
-
-  /**
-   * `true` means that the upload is completed.
-   * This is independent of the upload `progress`.
-   */
-  uploadComplete?: boolean;
-}
-
-/**
  * Strings of {@link SendBox} that can be overridden.
  *
  * @public
@@ -93,26 +75,31 @@ export interface SendBoxStrings {
    * Aria label for send message button
    */
   sendButtonAriaLabel: string;
-  /* @conditional-compile-remove(file-sharing) */
+  /* @conditional-compile-remove(file-sharing-acs) */
   /**
-   * Error message indicating that all file uploads are not complete.
+   * Error message indicating that all attachment uploads are not complete.
    */
-  fileUploadsPendingError: string;
-  /* @conditional-compile-remove(file-sharing) */
+  attachmentUploadsPendingError: string;
+  /* @conditional-compile-remove(file-sharing-acs) */
   /**
-   * Aria label to notify user when focus is on cancel file upload button.
+   * Aria label to notify user when focus is on cancel attachment upload button.
    */
-  removeFile: string;
-  /* @conditional-compile-remove(file-sharing) */
+  removeAttachment: string;
+  /* @conditional-compile-remove(file-sharing-acs) */
   /**
-   * Aria label to notify user file uploading starts.
+   * Aria label to notify user attachment uploading starts.
    */
   uploading: string;
-  /* @conditional-compile-remove(file-sharing) */
+  /* @conditional-compile-remove(file-sharing-acs) */
   /**
-   * Aria label to notify user file is uploaded.
+   * Aria label to notify user attachment is uploaded.
    */
   uploadCompleted: string;
+  /* @conditional-compile-remove(file-sharing-acs) */
+  /**
+   * Aria label to notify user more attachment action menu.
+   */
+  attachmentMoreMenu: string;
 }
 
 /**
@@ -133,7 +120,11 @@ export interface SendBoxProps {
   /**
    * Optional override behavior on send button click
    */
-  onSendMessage?: (content: string) => Promise<void>;
+  onSendMessage?: (
+    content: string,
+    /* @conditional-compile-remove(file-sharing-acs) */
+    options?: MessageOptions
+  ) => Promise<void>;
   /* @conditional-compile-remove(mention) */
   /**
    * Optional props needed to lookup suggestions in the mention scenario.
@@ -177,28 +168,28 @@ export interface SendBoxProps {
    * When undefined nothing has focus on render
    */
   autoFocus?: 'sendBoxTextField';
-  /* @conditional-compile-remove(file-sharing) */
+  /* @conditional-compile-remove(file-sharing-acs) */
   /**
-   * Optional callback to render uploaded files in the SendBox. The sendBox will expand
-   * vertically to accommodate the uploaded files. File uploads will
+   * Optional callback to render uploaded attachments in the SendBox. The sendBox will expand
+   * vertically to accommodate the uploaded attachments. Attachment uploads will
    * be rendered below the text area in sendBox.
    * @beta
    */
-  onRenderFileUploads?: () => JSX.Element;
-  /* @conditional-compile-remove(file-sharing) */
+  onRenderAttachmentUploads?: () => JSX.Element;
+  /* @conditional-compile-remove(file-sharing-acs) */
   /**
-   * Optional array of active file uploads where each object has attributes
-   * of a file upload like name, progress, errorMessage etc.
+   * Optional array of type {@link AttachmentMetadataInProgress}
+   * to render attachments being uploaded in the SendBox.
    * @beta
    */
-  activeFileUploads?: ActiveFileUpload[];
-  /* @conditional-compile-remove(file-sharing) */
+  attachments?: AttachmentMetadataInProgress[];
+  /* @conditional-compile-remove(file-sharing-acs) */
   /**
-   * Optional callback to remove the file upload before sending by clicking on
+   * Optional callback to remove the attachment upload before sending by clicking on
    * cancel icon.
    * @beta
    */
-  onCancelFileUpload?: (fileId: string) => void;
+  onCancelAttachmentUpload?: (attachmentId: string) => void;
 }
 
 /**
@@ -221,20 +212,27 @@ export const SendBox = (props: SendBoxProps): JSX.Element => {
     styles,
     autoFocus,
     /* @conditional-compile-remove(mention) */
-    mentionLookupOptions
+    mentionLookupOptions,
+    /* @conditional-compile-remove(file-sharing-acs) */
+    attachments
   } = props;
   const theme = useTheme();
   const localeStrings = useLocale().strings.sendBox;
   const strings = { ...localeStrings, ...props.strings };
   const ids = useIdentifiers();
-  const activeFileUploads = activeFileUploadsTrampoline(props);
 
   const [textValue, setTextValue] = useState('');
   const [textValueOverflow, setTextValueOverflow] = useState(false);
 
   const sendTextFieldRef = React.useRef<ITextField>(null);
 
-  const [fileUploadsPendingError, setFileUploadsPendingError] = useState<SendBoxErrorBarError | undefined>(undefined);
+  /* @conditional-compile-remove(file-sharing-acs) */
+  const customV9Styles = useV9CustomStyles();
+
+  /* @conditional-compile-remove(file-sharing-acs) */
+  const [attachmentUploadsPendingError, setAttachmentUploadsPendingError] = useState<SendBoxErrorBarError | undefined>(
+    undefined
+  );
 
   const sendMessageOnClick = (): void => {
     // don't send a message when disabled
@@ -242,23 +240,37 @@ export const SendBox = (props: SendBoxProps): JSX.Element => {
       return;
     }
 
-    // Don't send message until all files have been uploaded successfully
-    setFileUploadsPendingError(undefined);
+    // Don't send message until all attachments have been uploaded successfully
+    /* @conditional-compile-remove(file-sharing-acs) */
+    setAttachmentUploadsPendingError(undefined);
 
-    if (hasIncompleteFileUploads(props)) {
-      /* @conditional-compile-remove(file-sharing) */
-      setFileUploadsPendingError({ message: strings.fileUploadsPendingError, timestamp: Date.now() });
+    /* @conditional-compile-remove(file-sharing-acs) */
+    if (hasIncompleteAttachmentUploads(attachments)) {
+      setAttachmentUploadsPendingError({ message: strings.attachmentUploadsPendingError, timestamp: Date.now() });
       return;
     }
 
     const message = textValue;
     // we don't want to send empty messages including spaces, newlines, tabs
-    // Message can be empty if there is a valid file upload
-    if (!EMPTY_MESSAGE_REGEX.test(message) || hasFile(props)) {
-      onSendMessage && onSendMessage(sanitizeText(message));
+    // Message can be empty if there is a valid attachment upload
+    if (
+      sanitizeText(message).length > 0 ||
+      /* @conditional-compile-remove(file-sharing-acs) */ isAttachmentUploadCompleted(attachments)
+    ) {
+      onSendMessage &&
+        onSendMessage(
+          message,
+          /* @conditional-compile-remove(file-sharing-acs) */ /* @conditional-compile-remove(rich-text-editor-composite-support) */
+          {
+            /* @conditional-compile-remove(file-sharing-acs) */
+            attachments: toAttachmentMetadata(attachments),
+            /* @conditional-compile-remove(rich-text-editor-composite-support) */
+            type: 'text'
+          }
+        );
       setTextValue('');
+      sendTextFieldRef.current?.focus();
     }
-    sendTextFieldRef.current?.focus();
   };
 
   const setText = (newValue?: string | undefined): void => {
@@ -266,16 +278,28 @@ export const SendBox = (props: SendBoxProps): JSX.Element => {
       return;
     }
 
-    if (newValue.length > MAXIMUM_LENGTH_OF_MESSAGE) {
-      setTextValueOverflow(true);
-    } else {
-      setTextValueOverflow(false);
-    }
+    setTextValueOverflow(isMessageTooLong(newValue.length));
     setTextValue(newValue);
   };
 
   const textTooLongMessage = textValueOverflow ? strings.textTooLong : undefined;
   const errorMessage = systemMessage ?? textTooLongMessage;
+
+  const isSendBoxButtonDisabledValue = useMemo(() => {
+    return isSendBoxButtonDisabled({
+      hasContent: sanitizeText(textValue).length > 0,
+      /* @conditional-compile-remove(file-sharing-acs) */ hasCompletedAttachmentUploads:
+        isAttachmentUploadCompleted(attachments),
+      hasError: !!errorMessage,
+      disabled: !!disabled
+    });
+  }, [
+    /* @conditional-compile-remove(file-sharing-acs) */
+    attachments,
+    disabled,
+    errorMessage,
+    textValue
+  ]);
 
   const mergedSendButtonStyle = useMemo(
     () => mergeStyles(sendButtonStyle, styles?.sendMessageIconContainer),
@@ -284,19 +308,14 @@ export const SendBox = (props: SendBoxProps): JSX.Element => {
 
   const mergedStyles = useMemo(() => concatStyleSets(styles), [styles]);
 
-  const hasText = !!textValue;
-  const hasTextOrFile = hasText || hasFile(props);
-
   const mergedSendIconStyle = useMemo(
     () =>
-      mergeStyles(
-        sendIconStyle,
-        {
-          color: !!errorMessage || !hasTextOrFile ? theme.palette.neutralTertiary : theme.palette.themePrimary
-        },
-        styles?.sendMessageIcon
-      ),
-    [errorMessage, hasTextOrFile, theme, styles?.sendMessageIcon]
+      sendIconStyle({
+        theme,
+        isSendBoxButtonDisabled: isSendBoxButtonDisabledValue,
+        customSendIconStyle: styles?.sendMessageIcon
+      }),
+    [theme, isSendBoxButtonDisabledValue, styles?.sendMessageIcon]
   );
 
   const onRenderSendIcon = useCallback(
@@ -309,41 +328,57 @@ export const SendBox = (props: SendBoxProps): JSX.Element => {
     [mergedSendIconStyle, onRenderIcon, textValue]
   );
 
-  // Ensure that errors are cleared when there are no files in sendBox
+  // Ensure that errors are cleared when there are no attachments in sendBox
+  /* @conditional-compile-remove(file-sharing-acs) */
   React.useEffect(() => {
-    if (!activeFileUploads?.filter((upload) => !upload.error).length) {
-      setFileUploadsPendingError(undefined);
+    if (!attachments?.filter((upload) => !upload.error).length) {
+      setAttachmentUploadsPendingError(undefined);
     }
-  }, [activeFileUploads]);
+  }, [attachments]);
 
+  /* @conditional-compile-remove(file-sharing-acs) */
   const sendBoxErrorsProps = useMemo(() => {
     return {
-      fileUploadsPendingError: fileUploadsPendingError,
-      fileUploadError: activeFileUploads?.filter((fileUpload) => fileUpload.error).pop()?.error
+      attachmentUploadsPendingError: attachmentUploadsPendingError,
+      attachmentProgressError: attachments?.filter((attachmentUpload) => attachmentUpload.error).pop()?.error
     };
-  }, [activeFileUploads, fileUploadsPendingError]);
+  }, [attachments, attachmentUploadsPendingError]);
 
-  /* @conditional-compile-remove(file-sharing) */
-  const onRenderFileUploads = useCallback(() => {
-    if (!activeFileUploads?.filter((upload) => !upload.error).length) {
+  /* @conditional-compile-remove(file-sharing-acs) */
+  const onRenderAttachmentUploads = useCallback(() => {
+    if (!attachments?.filter((upload) => !upload.error).length) {
       return null;
     }
-    return props.onRenderFileUploads ? (
-      props.onRenderFileUploads()
+    return props.onRenderAttachmentUploads ? (
+      props.onRenderAttachmentUploads()
     ) : (
-      <Stack className={fileUploadCardsStyles}>
-        <_FileUploadCards
-          activeFileUploads={activeFileUploads}
-          onCancelFileUpload={props.onCancelFileUpload}
-          strings={{
-            removeFile: props.strings?.removeFile ?? localeStrings.removeFile,
-            uploading: props.strings?.uploading ?? localeStrings.uploading,
-            uploadCompleted: props.strings?.uploadCompleted ?? localeStrings.uploadCompleted
-          }}
-        />
+      <Stack className={attachmentUploadCardsStyles}>
+        <FluentV9ThemeProvider v8Theme={theme} className={customV9Styles.clearBackground}>
+          <_AttachmentUploadCards
+            attachments={attachments}
+            onCancelAttachmentUpload={props.onCancelAttachmentUpload}
+            strings={{
+              removeAttachment: props.strings?.removeAttachment ?? localeStrings.removeAttachment,
+              uploading: props.strings?.uploading ?? localeStrings.uploading,
+              uploadCompleted: props.strings?.uploadCompleted ?? localeStrings.uploadCompleted,
+              attachmentMoreMenu: props.strings?.attachmentMoreMenu ?? localeStrings.attachmentMoreMenu
+            }}
+            disabled={disabled}
+          />
+        </FluentV9ThemeProvider>
       </Stack>
     );
-  }, [activeFileUploads, props, localeStrings]);
+  }, [
+    attachments,
+    props,
+    theme,
+    customV9Styles.clearBackground,
+    localeStrings.removeAttachment,
+    localeStrings.uploading,
+    localeStrings.uploadCompleted,
+    localeStrings.attachmentMoreMenu,
+    disabled
+  ]);
 
   return (
     <Stack
@@ -352,15 +387,26 @@ export const SendBox = (props: SendBoxProps): JSX.Element => {
         { overflow: 'visible' } // This is needed for the mention popup to be visible
       )}
     >
-      <SendBoxErrors {...sendBoxErrorsProps} />
+      {
+        /* @conditional-compile-remove(file-sharing-acs) */
+        <SendBoxErrors
+          attachmentProgressError={
+            sendBoxErrorsProps.attachmentProgressError
+              ? {
+                  message: sendBoxErrorsProps.attachmentProgressError.message,
+                  timestamp: Date.now()
+                }
+              : undefined
+          }
+          attachmentUploadsPendingError={sendBoxErrorsProps.attachmentUploadsPendingError}
+        />
+      }
       <Stack
-        className={mergeStyles(
-          borderAndBoxShadowStyle({
-            theme,
-            hasErrorMessage: !!errorMessage,
-            disabled: !!disabled
-          })
-        )}
+        className={borderAndBoxShadowStyle({
+          theme,
+          hasErrorMessage: !!errorMessage,
+          disabled: !!disabled
+        })}
       >
         <InputBoxComponent
           autoFocus={autoFocus}
@@ -399,44 +445,14 @@ export const SendBox = (props: SendBoxProps): JSX.Element => {
             className={mergedSendButtonStyle}
             ariaLabel={localeStrings.sendButtonAriaLabel}
             tooltipContent={localeStrings.sendButtonAriaLabel}
+            disabled={isSendBoxButtonDisabledValue}
           />
         </InputBoxComponent>
         {
-          /* @conditional-compile-remove(file-sharing) */
-          onRenderFileUploads()
+          /* @conditional-compile-remove(file-sharing-acs) */
+          onRenderAttachmentUploads()
         }
       </Stack>
     </Stack>
   );
-};
-
-/**
- * @private
- */
-const hasIncompleteFileUploads = (props: SendBoxProps): boolean => {
-  const activeFileUploads = activeFileUploadsTrampoline(props);
-  return !!(
-    activeFileUploads?.length &&
-    !activeFileUploads.filter((fileUpload) => !fileUpload.error).every((fileUpload) => fileUpload.uploadComplete)
-  );
-};
-
-const hasFile = (props: SendBoxProps): boolean => {
-  const activeFileUploads = activeFileUploadsTrampoline(props);
-  return !!activeFileUploads?.find((file) => !file.error);
-  return false;
-};
-
-const sanitizeText = (message: string): string => {
-  if (EMPTY_MESSAGE_REGEX.test(message)) {
-    return '';
-  } else {
-    return message;
-  }
-};
-
-const activeFileUploadsTrampoline = (props: SendBoxProps): ActiveFileUpload[] | undefined => {
-  /* @conditional-compile-remove(file-sharing) */
-  return props.activeFileUploads;
-  return [];
 };

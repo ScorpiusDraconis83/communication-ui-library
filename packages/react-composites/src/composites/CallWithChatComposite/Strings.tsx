@@ -18,6 +18,14 @@ export interface CallWithChatCompositeStrings {
    */
   selectedPeopleButtonLabel: string;
   /**
+   * {@link CallWithChatComposite} aria label for control bar People button when unchecked
+   */
+  peopleButtonTooltipOpenAriaLabel: string;
+  /**
+   * {@link CallWithChatComposite} aria label for control bar People button when checked
+   */
+  peopleButtonTooltipCloseAriaLabel: string;
+  /**
    * {@link CallWithChatComposite} control bar People button ToolTipContent
    */
   peopleButtonTooltipOpen: string;
@@ -59,28 +67,24 @@ export interface CallWithChatCompositeStrings {
    * Only used with `mobileView` set to `true`.
    */
   moreDrawerSpeakerMenuTitle: string;
-  /* @conditional-compile-remove(close-captions) */
   /**
    * Title for the captions sub-menu in more button drawer.
    *
    * Only used with `mobileView` set to `true`.
    */
   moreDrawerCaptionsMenuTitle: string;
-  /* @conditional-compile-remove(close-captions) */
   /**
    * Title for the spoken language sub-menu in more button drawer.
    *
    * Only used with `mobileView` set to `true`.
    */
   moreDrawerSpokenLanguageMenuTitle: string;
-  /* @conditional-compile-remove(close-captions) */
   /**
    * Title for the caption language sub-menu in more button drawer.
    *
    * Only used with `mobileView` set to `true`.
    */
   moreDrawerCaptionLanguageMenuTitle: string;
-  /* @conditional-compile-remove(gallery-layouts) */
   /**
    * Title for the gallery options sub-menu in the more button drawer.
    */
@@ -105,6 +109,16 @@ export interface CallWithChatCompositeStrings {
    * Side pane Chat screen title.
    */
   chatPaneTitle: string;
+  /* @conditional-compile-remove(breakout-rooms) */
+  /**
+   * Side pane Chat screen title in a breakout room.
+   */
+  breakoutRoomChatPaneTitle: string;
+  /* @conditional-compile-remove(breakout-rooms) */
+  /**
+   * Label for spinner when chat content is loading.
+   */
+  chatContentSpinnerLabel: string;
   /**
    * New Message label for chat button with notification icon component.
    */
@@ -125,7 +139,10 @@ export interface CallWithChatCompositeStrings {
    * Label for button to copy invite link
    */
   copyInviteLinkButtonLabel: string;
-  /* @conditional-compile-remove(PSTN-calls) */
+  /**
+   * Label for button to copy invite link when it has been actioned
+   */
+  copyInviteLinkButtonActionedLabel: string;
   /**
    * Label for button to open dialpad
    */
@@ -143,37 +160,30 @@ export interface CallWithChatCompositeStrings {
    */
   returnToCallButtonAriaLabel?: string;
 
-  /* @conditional-compile-remove(PSTN-calls) */
   /**
    * Label for add people dropdown
    */
   peoplePaneAddPeopleButtonLabel: string;
-  /* @conditional-compile-remove(PSTN-calls) */
   /**
    * Label for button to start a call
    */
   dialpadStartCallButtonLabel: string;
-  /* @conditional-compile-remove(PSTN-calls) */
   /**
    * Title for dialpad Modal
    */
   dialpadModalTitle: string;
-  /* @conditional-compile-remove(PSTN-calls) */
   /**
    * Aria Label for dialpad Modal
    */
   dialpadModalAriaLabel: string;
-  /* @conditional-compile-remove(PSTN-calls) */
   /**
    * Aria Label for dialpad Modal close button
    */
   dialpadCloseModalButtonAriaLabel: string;
-  /* @conditional-compile-remove(PSTN-calls) */
   /**
    * Placeholder text for dtmf dialpad
    */
   dtmfDialpadPlaceholderText: string;
-  /* @conditional-compile-remove(PSTN-calls) */
   /**
    * Label for the button to open dtmf dialpad
    */

@@ -7,8 +7,10 @@ import { useLocale } from '../../localization';
 import { StreamMedia } from '../StreamMedia';
 import { VideoTile } from '../VideoTile';
 import { CreateVideoStreamViewResult, VideoStreamOptions } from '../../types';
+import { ReactionResources, VideoGalleryLocalParticipant, VideoGalleryRemoteParticipant } from '../../types';
 import { loadingStyle } from './styles/RemoteScreenShare.styles';
 import { _formatString } from '@internal/acs-ui-common';
+import { MeetingReactionOverlay } from '../MeetingReactionOverlay';
 
 /**
  * A memoized version of VideoTile for rendering the remote screen share stream. React.memo is used for a performance
@@ -30,6 +32,9 @@ export const RemoteScreenShare = React.memo(
     isSpeaking?: boolean;
     renderElement?: HTMLElement;
     participantVideoScalingMode?: VideoStreamOptions;
+    reactionResources?: ReactionResources;
+    localParticipant?: VideoGalleryLocalParticipant;
+    remoteParticipants?: VideoGalleryRemoteParticipant[];
   }) => {
     const {
       userId,
@@ -39,7 +44,10 @@ export const RemoteScreenShare = React.memo(
       onCreateRemoteStreamView,
       onDisposeRemoteStreamView,
       isReceiving,
-      participantVideoScalingMode
+      participantVideoScalingMode,
+      reactionResources,
+      localParticipant,
+      remoteParticipants
     } = props;
     const locale = useLocale();
 
@@ -78,12 +86,28 @@ export const RemoteScreenShare = React.memo(
           ) : undefined
         }
         onRenderPlaceholder={() => <LoadingSpinner loadingMessage={loadingMessage} />}
+        overlay={
+          reactionResources && (
+            <MeetingReactionOverlay
+              reactionResources={reactionResources}
+              localParticipant={localParticipant}
+              remoteParticipants={remoteParticipants}
+              overlayMode="screen-share"
+            />
+          )
+        }
       />
     );
   }
 );
 
-const LoadingSpinner = (props: { loadingMessage: string }): JSX.Element => {
+/**
+ * LoadingSpinner component for displaying a loading spinner.
+ *
+ * @param {string} props.loadingMessage - The loading message to display.
+ * @returns {JSX.Element} The JSX element representing the loading spinner.
+ */
+export const LoadingSpinner = (props: { loadingMessage: string }): JSX.Element => {
   return (
     <Stack verticalAlign="center" className={loadingStyle}>
       <Spinner label={props.loadingMessage} size={SpinnerSize.xSmall} aria-live={'assertive'} />

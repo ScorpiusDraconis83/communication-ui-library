@@ -3,10 +3,8 @@
 
 import React from 'react';
 import { Dialpad, DialpadStrings, DtmfTone } from './Dialpad';
-/* @conditional-compile-remove(dialpad) */ /* @conditional-compile-remove(PSTN-calls) */
 import { createTestLocale, renderWithLocalization } from '../utils/testUtils';
 import { act, fireEvent, render, screen } from '@testing-library/react';
-import { registerIcons } from '@fluentui/react';
 
 const mockSendDTMF = jest.fn();
 
@@ -15,28 +13,10 @@ const onSendDtmfTone = (dtmfTone: DtmfTone): Promise<void> => {
   return Promise.resolve();
 };
 
-window.AudioContext = jest.fn().mockImplementation(() => {
-  return {};
-});
-
 describe('Dialpad tests', () => {
-  beforeAll(() => {
-    registerIcons({
-      icons: {
-        dialpadbackspace: <></>
-      }
-    });
-  });
   beforeEach(() => {
     mockSendDTMF.mockClear();
   });
-  /*
-   * Localization depends on public API for `LocalizationProvider` that does not
-   * have the strings for the beta-only `Dialpad` component.
-   * skip this test for stable build.
-   *
-   * @conditional-compile-remove(dialpad)
-   */
   test('Should localize default text ', async () => {
     const dialpadStrings: DialpadStrings = {
       placeholderText: Math.random().toString(),
@@ -87,7 +67,7 @@ describe('Dialpad tests', () => {
   });
 
   test('Dialpad input box should be editable by keyboard', async () => {
-    render(<Dialpad enableInputEditing={true} />);
+    render(<Dialpad />);
     const input = screen.getByRole('textbox');
 
     act(() => {
@@ -98,7 +78,7 @@ describe('Dialpad tests', () => {
   });
 
   test('Dialpad input box should filter out non-valid input', async () => {
-    render(<Dialpad enableInputEditing={true} />);
+    render(<Dialpad />);
     const input = screen.getByRole('textbox');
 
     act(() => {
@@ -109,7 +89,7 @@ describe('Dialpad tests', () => {
   });
 
   test('Typing in 12345678900 should show 1 (234) 567-8900 in input box', async () => {
-    render(<Dialpad enableInputEditing={true} />);
+    render(<Dialpad />);
     const input = screen.getByRole('textbox');
 
     act(() => {
@@ -120,7 +100,7 @@ describe('Dialpad tests', () => {
   });
 
   test('Typing in 2345678900 should show (234) 567-8900 in input box', async () => {
-    render(<Dialpad enableInputEditing={true} />);
+    render(<Dialpad />);
     const input = screen.getByRole('textbox');
 
     act(() => {
@@ -131,7 +111,7 @@ describe('Dialpad tests', () => {
   });
 
   test('Typing in 23456789000 should show  23456789000 in input box', async () => {
-    render(<Dialpad enableInputEditing={true} />);
+    render(<Dialpad />);
     const input = screen.getByRole('textbox');
 
     act(() => {

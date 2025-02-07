@@ -1,12 +1,11 @@
 // Copyright (c) Microsoft Corporation.
 // Licensed under the MIT License.
 
-import { AudioDeviceInfo, Call, EnvironmentInfo, VideoDeviceInfo } from '@azure/communication-calling';
+import { AudioDeviceInfo, Call, DeviceAccess, EnvironmentInfo, VideoDeviceInfo } from '@azure/communication-calling';
 import type { CallAdapter, CallAdapterState, VideoBackgroundEffect } from '../../../src';
 import type { MockCallAdapterState } from '../../common';
 import { produce } from 'immer';
-import EventEmitter from 'events';
-/* @conditional-compile-remove(end-of-call-survey) */
+import { EventEmitter } from 'events';
 import { CallSurvey, CallSurveyResponse } from '@azure/communication-calling';
 
 /**
@@ -28,9 +27,32 @@ export class MockCallAdapter implements CallAdapter {
     this._state = populateViewTargets(initialState);
     this._emitter = new EventEmitter();
   }
+  forbidAudio(userIds: string[]): Promise<void> {
+    throw new Error(`Method not implemented. userIds: ${userIds}`);
+  }
+  permitAudio(userIds: string[]): Promise<void> {
+    throw new Error(`Method not implemented. userIds: ${userIds}`);
+  }
+  forbidOthersAudio(): Promise<void> {
+    throw new Error('Method not implemented.');
+  }
+  permitOthersAudio(): Promise<void> {
+    throw new Error('Method not implemented.');
+  }
+  forbidVideo(userIds: string[]): Promise<void> {
+    throw new Error(`Method not implemented. userIds: ${userIds}`);
+  }
+  permitVideo(userIds: string[]): Promise<void> {
+    throw new Error(`Method not implemented. userIds: ${userIds}`);
+  }
+  forbidOthersVideo(): Promise<void> {
+    throw new Error('Method not implemented.');
+  }
+  permitOthersVideo(): Promise<void> {
+    throw new Error('Method not implemented.');
+  }
 
-  /* @conditional-compile-remove(reaction) */
-  onReactionClicked(emoji: string): Promise<void> {
+  onReactionClick(emoji: string): Promise<void> {
     throw new Error(`Method could not send ${emoji}.`);
   }
   addParticipant(): Promise<void> {
@@ -93,6 +115,22 @@ export class MockCallAdapter implements CallAdapter {
   disposeStreamView(): Promise<void> {
     throw Error('disposeStreamView not implemented');
   }
+  /* @conditional-compile-remove(together-mode) */
+  createTogetherModeStreamView(): Promise<void> {
+    throw Error('createTogetherModeStreamView not implemented');
+  }
+  /* @conditional-compile-remove(together-mode) */
+  startTogetherMode(): Promise<void> {
+    throw Error('startTogetherMode not implemented');
+  }
+  /* @conditional-compile-remove(together-mode) */
+  setTogetherModeSceneSize(width: number, height: number): void {
+    throw Error(`Setting Together Mode width ${width} and height: ${height} not implemented`);
+  }
+  /* @conditional-compile-remove(together-mode) */
+  disposeTogetherModeStreamView(): Promise<void> {
+    throw Error('disposeFeatureStreamView not implemented');
+  }
   disposeScreenShareStreamView(): Promise<void> {
     return Promise.resolve();
   }
@@ -102,8 +140,11 @@ export class MockCallAdapter implements CallAdapter {
   disposeRemoteVideoStreamView(): Promise<void> {
     return Promise.resolve();
   }
-  askDevicePermission(): Promise<void> {
-    return Promise.resolve();
+  askDevicePermission(): Promise<DeviceAccess> {
+    return Promise.resolve({
+      audio: false,
+      video: false
+    });
   }
   async queryCameras(): Promise<VideoDeviceInfo[]> {
     return [];
@@ -126,29 +167,41 @@ export class MockCallAdapter implements CallAdapter {
   getEnvironmentInfo(): Promise<EnvironmentInfo> {
     throw Error('getEnvironmentInfo not implemented');
   }
-  /* @conditional-compile-remove(close-captions) */
   startCaptions(): Promise<void> {
     throw Error('startCaptions not implemented');
   }
-  /* @conditional-compile-remove(close-captions) */
   stopCaptions(): Promise<void> {
     throw Error('stopCaptions not implemented');
   }
-  /* @conditional-compile-remove(close-captions) */
   setCaptionLanguage(): Promise<void> {
     throw Error('setCaptionLanguage not implemented');
   }
-  /* @conditional-compile-remove(close-captions) */
   setSpokenLanguage(): Promise<void> {
     throw Error('setSpokenLanguage not implemented');
   }
-  /* @conditional-compile-remove(spotlight) */
+  /* @conditional-compile-remove(rtt) */
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  sendRealTimeText(text: string, isFinalized: boolean): Promise<void> {
+    throw Error('sendRealTimeText not implemented');
+  }
   startSpotlight(): Promise<void> {
     throw Error('startSpotlight not implemented');
   }
-  /* @conditional-compile-remove(spotlight) */
   stopSpotlight(): Promise<void> {
     throw Error('stopSpotlight not implemented');
+  }
+  stopAllSpotlight(): Promise<void> {
+    throw Error('stopAllSpotlight not implemented');
+  }
+  muteParticipant(): Promise<void> {
+    throw Error('muteParticipant not implemented');
+  }
+  muteAllRemoteParticipants(): Promise<void> {
+    throw Error('muteAllRemoteParticipants not implemented');
+  }
+  /* @conditional-compile-remove(breakout-rooms) */
+  returnFromBreakoutRoom(): Promise<void> {
+    throw Error('returnFromBreakoutRoom not implemented');
   }
 
   async setCamera(sourceInfo: VideoDeviceInfo): Promise<void> {
@@ -184,13 +237,13 @@ export class MockCallAdapter implements CallAdapter {
   startVideoBackgroundEffect(videoBackgroundEffect: VideoBackgroundEffect): Promise<void> {
     if (videoBackgroundEffect.effectName === 'blur') {
       this.modifyState((draft: CallAdapterState) => {
-        if (!draft.call && draft.devices?.unparentedViews?.length > 0) {
+        if (!draft.call && draft.devices?.unparentedViews?.[0]) {
           draft.devices.unparentedViews[0].view = {
             scalingMode: 'Crop',
             isMirrored: false,
             target: createMockHTMLElement('blur background')
           };
-        } else if (draft.call && draft.call.localVideoStreams.length > 0) {
+        } else if (draft.call && draft.call.localVideoStreams[0]) {
           draft.call.localVideoStreams[0].view = {
             scalingMode: 'Crop',
             isMirrored: false,
@@ -200,13 +253,13 @@ export class MockCallAdapter implements CallAdapter {
       });
     } else if (videoBackgroundEffect.effectName === 'replacement') {
       this.modifyState((draft: CallAdapterState) => {
-        if (!draft.call && draft.devices?.unparentedViews?.length > 0) {
+        if (!draft.call && draft.devices?.unparentedViews?.[0]) {
           draft.devices.unparentedViews[0].view = {
             scalingMode: 'Crop',
             isMirrored: false,
             target: createMockHTMLElementWithCustomBackground(videoBackgroundEffect.backgroundImageUrl)
           };
-        } else if (draft.call && draft.call.localVideoStreams.length > 0) {
+        } else if (draft.call && draft.call.localVideoStreams[0]) {
           draft.call.localVideoStreams[0].view = {
             scalingMode: 'Crop',
             isMirrored: false,
@@ -232,7 +285,15 @@ export class MockCallAdapter implements CallAdapter {
     });
   }
 
-  /* @conditional-compile-remove(end-of-call-survey) */ // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  startNoiseSuppressionEffect(): Promise<void> {
+    throw new Error('startNoiseSuppressionEffect not implemented.');
+  }
+
+  stopNoiseSuppressionEffect(): Promise<void> {
+    throw new Error('stopNoiseSuppressionEffect not implemented.');
+  }
+
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   submitSurvey(survey: CallSurvey): Promise<CallSurveyResponse | undefined> {
     throw Error('submitStarSurvey not implemented');
   }

@@ -3,6 +3,7 @@
 
 import { useEffect, useMemo, useState } from 'react';
 import { VideoStreamOptions, CreateVideoStreamViewResult, ViewScalingMode } from '../../types';
+import { callingComponentLogger } from '../utils/Logger';
 
 /** @private */
 export interface VideoStreamLifecycleMaintainerExtendableProps {
@@ -11,6 +12,8 @@ export interface VideoStreamLifecycleMaintainerExtendableProps {
   isMirrored?: boolean;
   scalingMode?: ViewScalingMode;
   isScreenSharingOn?: boolean;
+  streamId?: number;
+  isVideoPermitted?: boolean;
 }
 
 interface VideoStreamLifecycleMaintainerProps extends VideoStreamLifecycleMaintainerExtendableProps {
@@ -46,13 +49,15 @@ const useVideoStreamLifecycleMaintainer = (
     onCreateStreamView,
     onDisposeStreamView,
     renderElementExists,
-    scalingMode
+    scalingMode,
+    streamId,
+    isVideoPermitted
   } = props;
 
   const [videoStreamViewResult, setVideoStreamViewResult] = useState<CreateVideoStreamViewResult | undefined>();
 
   useEffect(() => {
-    if (isStreamAvailable && !renderElementExists) {
+    if (isVideoPermitted !== false && isStreamAvailable && !renderElementExists) {
       onCreateStreamView?.({ isMirrored, scalingMode })?.then((result) => {
         result && setVideoStreamViewResult(result);
       });
@@ -65,6 +70,8 @@ const useVideoStreamLifecycleMaintainer = (
         if (!isScreenSharingOn) {
           onDisposeStreamView?.();
         }
+      } else {
+        callingComponentLogger.warning('Stream view element does not exist when disposing stream view');
       }
     };
   }, [
@@ -74,7 +81,9 @@ const useVideoStreamLifecycleMaintainer = (
     onCreateStreamView,
     onDisposeStreamView,
     renderElementExists,
-    scalingMode
+    scalingMode,
+    streamId,
+    isVideoPermitted
   ]);
 
   // The execution order for above useEffect is onCreateRemoteStreamView =>(async time gap) RenderElement generated => element disposed => onDisposeRemoteStreamView

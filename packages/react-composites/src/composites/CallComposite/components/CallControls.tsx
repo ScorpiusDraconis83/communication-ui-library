@@ -2,15 +2,11 @@
 // Licensed under the MIT License.
 
 import { memoizeFunction, Stack, useTheme } from '@fluentui/react';
-/* @conditional-compile-remove(PSTN-calls) */ /* @conditional-compile-remove(one-to-n-calling) */ /* @conditional-compile-remove(close-captions) */ /* @conditional-compile-remove(raise-hand) */
 import { IContextualMenuItem } from '@fluentui/react';
-/* @conditional-compile-remove(PSTN-calls) */
-import { useState } from 'react';
 import { _isInLobbyOrConnecting } from '@internal/calling-component-bindings';
 import { ControlBar, DevicesButton, ParticipantMenuItemsCallback } from '@internal/react-components';
-/* @conditional-compile-remove(PSTN-calls) */ /* @conditional-compile-remove(one-to-n-calling) */
 import { HoldButton } from '@internal/react-components';
-import React, { useMemo } from 'react';
+import React, { useMemo, useCallback, useState, useEffect } from 'react';
 import { CallControlOptions } from '../types/CallControlOptions';
 import { Camera } from './buttons/Camera';
 import { Devices } from './buttons/Devices';
@@ -19,27 +15,16 @@ import { Microphone } from './buttons/Microphone';
 import { Participants } from './buttons/Participants';
 import { ScreenShare } from './buttons/ScreenShare';
 import { ContainerRectProps } from '../../common/ContainerRectProps';
-/* @conditional-compile-remove(one-to-n-calling) @conditional-compile-remove(PSTN-calls) */
 import { People } from './buttons/People';
-/* @conditional-compile-remove(PSTN-calls) */ /* @conditional-compile-remove(one-to-n-calling) */ /* @conditional-compile-remove(close-captions) */ /* @conditional-compile-remove(raise-hand) */
 import { useLocale } from '../../localization';
-/* @conditional-compile-remove(PSTN-calls) */ /* @conditional-compile-remove(one-to-n-calling) */ /* @conditional-compile-remove(close-captions) */ /* @conditional-compile-remove(raise-hand) */
 import { MoreButton } from '../../common/MoreButton';
-/* @conditional-compile-remove(PSTN-calls) */ /* @conditional-compile-remove(one-to-n-calling) */ /* @conditional-compile-remove(raise-hand) */
 import { usePropsFor } from '../hooks/usePropsFor';
-/* @conditional-compile-remove(PSTN-calls) */ /* @conditional-compile-remove(one-to-n-calling) */ /* @conditional-compile-remove(close-captions) */ /* @conditional-compile-remove(raise-hand) */
 import { buttonFlyoutIncreasedSizeStyles } from '../styles/Buttons.styles';
-/* @conditional-compile-remove(PSTN-calls) */
-import { SendDtmfDialpad } from '../../common/SendDtmfDialpad';
-/* @conditional-compile-remove(PSTN-calls) */ /* @conditional-compile-remove(rooms) */
 import { useAdapter } from '../adapter/CallAdapterProvider';
 import { isDisabled } from '../utils';
 import { callControlsContainerStyles } from '../styles/CallPage.styles';
-import { CommonCallAdapter } from '../adapter';
-/* @conditional-compile-remove(raise-hand) */
 import { RaiseHand } from './buttons/RaiseHand';
-/* @conditional-compile-remove(raise-hand) */
-import { RaiseHandButton, RaiseHandButtonProps } from '@internal/react-components';
+import { RaiseHandButton } from '@internal/react-components';
 import { _generateDefaultDeviceMenuProps } from '@internal/react-components';
 import {
   CUSTOM_BUTTON_OPTIONS,
@@ -47,13 +32,25 @@ import {
   generateCustomCallDesktopOverflowButtons,
   onFetchCustomButtonPropsTrampoline
 } from '../../common/ControlBar/CustomButton';
-/* @conditional-compile-remove(reaction) */
 import { Reaction } from './buttons/Reaction';
+import { useSelector } from '../hooks/useSelector';
+import { capabilitySelector } from '../../CallComposite/selectors/capabilitySelector';
+import { callStatusSelector } from '../../CallComposite/selectors/callStatusSelector';
+import { _isSafari } from '../../CallComposite/utils';
+import {
+  getIsRoomsCall,
+  getReactionResources,
+  getRole,
+  getDeepNoiseSuppresionEffectsDependency,
+  getDeepNoiseSuppresionIsOnByDefault,
+  getHideDeepNoiseSupressionButton,
+  getEnvironmentInfo
+} from '../selectors/baseSelectors';
+
 /**
  * @private
  */
 export type CallControlsProps = {
-  /* @conditional-compile-remove(one-to-n-calling) @conditional-compile-remove(PSTN-calls) */
   peopleButtonChecked?: boolean;
   onPeopleButtonClicked?: () => void;
   callInvitationURL?: string;
@@ -96,13 +93,44 @@ export const CallControls = (props: CallControlsProps & ContainerRectProps): JSX
     [props.isMobile, props.options]
   );
 
-  /* @conditional-compile-remove(PSTN-calls) */ /* @conditional-compile-remove(rooms) */
-  const adapter = useAdapter();
-
-  /* @conditional-compile-remove(PSTN-calls) */ /* @conditional-compile-remove(one-to-n-calling) */ /* @conditional-compile-remove(close-captions) */ /* @conditional-compile-remove(raise-hand) */
   const localeStrings = useLocale();
 
-  /* @conditional-compile-remove(one-to-n-calling) @conditional-compile-remove(PSTN-calls) */
+  const [isDeepNoiseSuppressionOn, setDeepNoiseSuppressionOn] = useState<boolean>(false);
+
+  const adapter = useAdapter();
+  const startDeepNoiseSuppression = useCallback(async () => {
+    await adapter.startNoiseSuppressionEffect();
+  }, [adapter]);
+
+  const deepNoiseSuppresionEffectsDependency = useSelector(getDeepNoiseSuppresionEffectsDependency);
+  const deepNoiseSuppressionOnByDefault = useSelector(getDeepNoiseSuppresionIsOnByDefault);
+  useEffect(() => {
+    if (deepNoiseSuppresionEffectsDependency && deepNoiseSuppressionOnByDefault) {
+      startDeepNoiseSuppression();
+      setDeepNoiseSuppressionOn(true);
+    }
+  }, [deepNoiseSuppresionEffectsDependency, deepNoiseSuppressionOnByDefault, startDeepNoiseSuppression]);
+
+  const environmentInfo = useSelector(getEnvironmentInfo);
+
+  const isSafari = _isSafari(environmentInfo);
+  const hideDeepNoiseSuppressionButton = useSelector(getHideDeepNoiseSupressionButton);
+  const showNoiseSuppressionButton = !!(
+    deepNoiseSuppresionEffectsDependency &&
+    !hideDeepNoiseSuppressionButton &&
+    !isSafari
+  );
+
+  const onClickNoiseSuppression = useCallback(async () => {
+    if (isDeepNoiseSuppressionOn) {
+      await adapter.stopNoiseSuppressionEffect();
+      setDeepNoiseSuppressionOn(false);
+    } else {
+      await adapter.startNoiseSuppressionEffect();
+      setDeepNoiseSuppressionOn(true);
+    }
+  }, [adapter, isDeepNoiseSuppressionOn]);
+
   const peopleButtonStrings = useMemo(
     () => ({
       label: localeStrings.strings.call.peopleButtonLabel,
@@ -112,7 +140,6 @@ export const CallControls = (props: CallControlsProps & ContainerRectProps): JSX
     [localeStrings]
   );
 
-  /* @conditional-compile-remove(PSTN-calls) */ /* @conditional-compile-remove(one-to-n-calling) */ /* @conditional-compile-remove(close-captions) */ /* @conditional-compile-remove(raise-hand) */
   const moreButtonStrings = useMemo(
     () => ({
       label: localeStrings.strings.call.moreButtonCallingLabel,
@@ -121,24 +148,16 @@ export const CallControls = (props: CallControlsProps & ContainerRectProps): JSX
     [localeStrings]
   );
 
-  /* @conditional-compile-remove(PSTN-calls) */
-  const dialpadStrings = useMemo(
-    () => ({
-      dialpadModalAriaLabel: localeStrings.strings.call.dialpadModalAriaLabel,
-      dialpadCloseModalButtonAriaLabel: localeStrings.strings.call.dialpadCloseModalButtonAriaLabel,
-      placeholderText: localeStrings.strings.call.dtmfDialpadPlaceholderText
-    }),
-    [localeStrings]
-  );
-
-  /* @conditional-compile-remove(PSTN-calls) */ /* @conditional-compile-remove(one-to-n-calling) */
   const holdButtonProps = usePropsFor(HoldButton);
 
-  /* @conditional-compile-remove(raise-hand) */
-  const raiseHandButtonProps = usePropsFor(RaiseHandButton) as RaiseHandButtonProps;
+  const raiseHandButtonProps = usePropsFor(RaiseHandButton);
 
-  /* @conditional-compile-remove(PSTN-calls) */
-  const alternateCallerId = useAdapter().getState().alternateCallerId;
+  const capabilitiesSelector = useSelector(capabilitySelector);
+  const callState = useSelector(callStatusSelector);
+  const isReactionAllowed =
+    callState.callStatus !== 'Connected' ||
+    !capabilitiesSelector?.capabilities ||
+    capabilitiesSelector.capabilities.useReactions.isPresent;
 
   const devicesButtonProps = usePropsFor(DevicesButton);
 
@@ -163,20 +182,17 @@ export const CallControls = (props: CallControlsProps & ContainerRectProps): JSX
     numberOfButtons++;
   }
 
-  const showParticipantsButtonInControlBar =
-    isEnabled(options?.participantsButton) &&
-    /* @conditional-compile-remove(one-to-n-calling) */ /* @conditional-compile-remove(PSTN-calls) */
-    !props.isMobile;
+  const showParticipantsButtonInControlBar = isEnabled(options?.participantsButton) && !props.isMobile;
   if (showParticipantsButtonInControlBar) {
     numberOfButtons++;
   }
 
-  /* @conditional-compile-remove(reaction) */
-  const showReactionButtonInControlBar = isEnabled(options?.reactionButton) && !props.isMobile;
-  /* @conditional-compile-remove(reaction) */
+  const showReactionButtonInControlBar = isEnabled(options?.reactionButton) && isReactionAllowed && !props.isMobile;
   if (showReactionButtonInControlBar) {
     numberOfButtons++;
   }
+
+  const isRoomsCall = useSelector(getIsRoomsCall);
 
   const moreButtonContextualMenuItems = (): IContextualMenuItem[] => {
     const items: IContextualMenuItem[] = [];
@@ -199,8 +215,7 @@ export const CallControls = (props: CallControlsProps & ContainerRectProps): JSX
       });
     }
 
-    /* @conditional-compile-remove(one-to-n-calling) */ /* @conditional-compile-remove(PSTN-calls) */
-    if (!isRoomsCallTrampoline(adapter)) {
+    if (!isRoomsCall) {
       items.push({
         key: 'holdButtonKey',
         text: localeStrings.component.strings.holdButton.tooltipOffContent,
@@ -213,22 +228,6 @@ export const CallControls = (props: CallControlsProps & ContainerRectProps): JSX
         },
         disabled: isDisabled(options?.holdButton),
         ['data-ui-id']: 'hold-button'
-      });
-    }
-
-    /* @conditional-compile-remove(PSTN-calls) */
-    // dtmf tone sending only works for 1:1 PSTN call
-    if (alternateCallerId) {
-      items.push({
-        key: 'showDialpadKey',
-        text: localeStrings.strings.call.openDtmfDialpadLabel,
-        onClick: () => {
-          setShowDialpad(true);
-        },
-        iconProps: { iconName: 'PeoplePaneOpenDialpad', styles: { root: { lineHeight: 0 } } },
-        itemProps: {
-          styles: buttonFlyoutIncreasedSizeStyles
-        }
       });
     }
     return items;
@@ -265,16 +264,11 @@ export const CallControls = (props: CallControlsProps & ContainerRectProps): JSX
     showMoreButton = isEnabled(options?.moreButton);
   }
 
-  /* @conditional-compile-remove(raise-hand) */
+  const reactionResources = useSelector(getReactionResources);
   const raiseHandButtonIsEnabled = isEnabled(options?.raiseHandButton);
-  /* @conditional-compile-remove(raise-hand) */
   let showRaiseHandButtonInControlBar = raiseHandButtonIsEnabled;
-  /* @conditional-compile-remove(rooms) */
-  const role = adapter.getState().call?.role;
-  /* @conditional-compile-remove(rooms) */
-  const hideRaiseHandButtonInRoomsCall =
-    adapter.getState().isRoomsCall && role && ['Consumer', 'Unknown'].includes(role);
-  /* @conditional-compile-remove(raise-hand) */
+  const role = useSelector(getRole);
+  const hideRaiseHandButtonInRoomsCall = isRoomsCall && role && ['Consumer', 'Unknown'].includes(role);
   if (showRaiseHandButtonInControlBar && (props.isMobile ? numberOfButtons < 5 : true)) {
     numberOfButtons++;
   } else {
@@ -301,8 +295,7 @@ export const CallControls = (props: CallControlsProps & ContainerRectProps): JSX
     });
   }
 
-  /* @conditional-compile-remove(raise-hand) */
-  if (!showRaiseHandButtonInControlBar && /* @conditional-compile-remove(rooms) */ !hideRaiseHandButtonInRoomsCall) {
+  if (!showRaiseHandButtonInControlBar && !hideRaiseHandButtonInRoomsCall) {
     moreButtonMenuItems.push({
       key: 'raiseHandButtonKey',
       text: raiseHandButtonProps.checked
@@ -360,9 +353,6 @@ export const CallControls = (props: CallControlsProps & ContainerRectProps): JSX
     });
   }
 
-  /* @conditional-compile-remove(PSTN-calls) */
-  const [showDialpad, setShowDialpad] = useState(false);
-
   const theme = useTheme();
 
   // when props.options is false then we want to hide the whole control bar.
@@ -370,22 +360,8 @@ export const CallControls = (props: CallControlsProps & ContainerRectProps): JSX
     return <></>;
   }
 
-  /* @conditional-compile-remove(PSTN-calls) */
-  const onDismissDialpad = (): void => {
-    setShowDialpad(false);
-  };
-
   return (
     <Stack horizontalAlign="center" className={callControlsContainerStyles}>
-      {
-        /* @conditional-compile-remove(PSTN-calls) */
-        <SendDtmfDialpad
-          isMobile={!!props.isMobile}
-          strings={dialpadStrings}
-          showDialpad={showDialpad}
-          onDismissDialpad={onDismissDialpad}
-        />
-      }
       <Stack.Item>
         {/*
             Note: We use the layout="horizontal" instead of dockedBottom because of how we position the
@@ -399,21 +375,23 @@ export const CallControls = (props: CallControlsProps & ContainerRectProps): JSX
           styles={controlBarStyles(theme.semanticColors.bodyBackground)}
         >
           {microphoneButtonIsEnabled && (
-            <Microphone displayType={options?.displayType} disabled={isDisabled(options?.microphoneButton)} />
+            <Microphone
+              displayType={options?.displayType}
+              disabled={isDisabled(options?.microphoneButton)}
+              onClickNoiseSuppression={onClickNoiseSuppression}
+              isDeepNoiseSuppressionOn={isDeepNoiseSuppressionOn}
+              showNoiseSuppressionButton={showNoiseSuppressionButton}
+            />
           )}
           {cameraButtonIsEnabled && (
             <Camera displayType={options?.displayType} disabled={isDisabled(options?.cameraButton)} />
           )}
-          {
-            /* @conditional-compile-remove(reaction) */
-            showReactionButtonInControlBar && <Reaction displayType={options?.displayType} />
-          }
-          {
-            /* @conditional-compile-remove(raise-hand) */ showRaiseHandButtonInControlBar &&
-              /* @conditional-compile-remove(rooms) */ !hideRaiseHandButtonInRoomsCall && (
-                <RaiseHand displayType={options?.displayType} />
-              )
-          }
+          {showReactionButtonInControlBar && reactionResources && (
+            <Reaction displayType={options?.displayType} reactionResource={reactionResources} />
+          )}
+          {showRaiseHandButtonInControlBar && !hideRaiseHandButtonInRoomsCall && (
+            <RaiseHand displayType={options?.displayType} />
+          )}
           {screenShareButtonIsEnabled && (
             <ScreenShare
               option={options?.screenShareButton}
@@ -432,7 +410,6 @@ export const CallControls = (props: CallControlsProps & ContainerRectProps): JSX
                 disabled={isDisabled(options?.participantsButton)}
               />
             ) && (
-              /* @conditional-compile-remove(one-to-n-calling) */ /* @conditional-compile-remove(PSTN-calls) */
               <People
                 checked={props.peopleButtonChecked}
                 ariaLabel={peopleButtonStrings?.label}
@@ -468,19 +445,16 @@ export const CallControls = (props: CallControlsProps & ContainerRectProps): JSX
                 />
               );
             })}
-          {
-            /* @conditional-compile-remove(PSTN-calls) */ /* @conditional-compile-remove(one-to-n-calling) */ /* @conditional-compile-remove(close-captions) */ /* @conditional-compile-remove(raise-hand) */
-            showMoreButton && (
-              <MoreButton
-                disableTooltip={props.isMobile}
-                data-ui-id="common-call-composite-more-button"
-                strings={moreButtonStrings}
-                menuIconProps={{ hidden: true }}
-                menuProps={{ items: moreButtonMenuItems }}
-                showLabel={options?.displayType !== 'compact'}
-              />
-            )
-          }
+          {showMoreButton && (
+            <MoreButton
+              disableTooltip={props.isMobile}
+              data-ui-id="common-call-composite-more-button"
+              strings={moreButtonStrings}
+              menuIconProps={{ hidden: true }}
+              menuProps={{ items: moreButtonMenuItems }}
+              showLabel={options?.displayType !== 'compact'}
+            />
+          )}
           {isEnabled(options?.endCallButton) && <EndCall displayType={options?.displayType} />}
         </ControlBar>
       </Stack.Item>
@@ -489,11 +463,3 @@ export const CallControls = (props: CallControlsProps & ContainerRectProps): JSX
 };
 
 const isEnabled = (option: unknown): boolean => option !== false;
-
-/** @private */
-export const isRoomsCallTrampoline = (adapter: CommonCallAdapter): boolean => {
-  /* @conditional-compile-remove(rooms) */
-  return adapter.getState().isRoomsCall;
-
-  return false;
-};

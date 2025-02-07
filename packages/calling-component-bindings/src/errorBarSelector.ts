@@ -54,18 +54,13 @@ export const errorBarSelector: ErrorBarSelector = createSelector(
     const activeErrorMessages: ActiveErrorMessage[] = [];
 
     const isSafari = (): boolean => {
-      /* @conditional-compile-remove(calling-environment-info) */
       return environmentInfo?.environment.browser === 'safari';
-      return /^((?!chrome|android|crios|fxios).)*safari/i.test(navigator.userAgent);
     };
 
     const isMacOS = (): boolean => {
-      /* @conditional-compile-remove(calling-environment-info) */
       return environmentInfo?.environment.platform === 'mac';
-      return false;
     };
 
-    // Errors reported via diagnostics are more reliable than from API method failures, so process those first.
     if (
       diagnostics?.network.latest.networkReceiveQuality?.value === DiagnosticQuality.Bad ||
       diagnostics?.network.latest.networkReceiveQuality?.value === DiagnosticQuality.Poor
@@ -157,7 +152,7 @@ export const errorBarSelector: ErrorBarSelector = createSelector(
     }
 
     appendActiveErrorIfDefined(activeErrorMessages, latestErrors, 'Call.unmute', 'unmuteGeneric');
-    /* @conditional-compile-remove(video-background-effects) */
+    appendActiveErrorIfDefined(activeErrorMessages, latestErrors, 'Call.mutedByOthers', 'mutedByRemoteParticipant');
     appendActiveErrorIfDefined(
       activeErrorMessages,
       latestErrors,
@@ -174,6 +169,19 @@ export const errorBarSelector: ErrorBarSelector = createSelector(
       );
     } else {
       appendActiveErrorIfDefined(activeErrorMessages, latestErrors, 'CallAgent.join', 'failedToJoinCallGeneric');
+    }
+
+    if (
+      latestErrors['Call.feature']?.message.match(
+        /Call\.feature: startSpotlight failed\. \d+ is the max number of participants that can be Spotlighted/g
+      )
+    ) {
+      appendActiveErrorIfDefined(
+        activeErrorMessages,
+        latestErrors,
+        'Call.feature',
+        'startSpotlightWhileMaxParticipantsAreSpotlighted'
+      );
     }
 
     // We only return the first few errors to avoid filling up the UI with too many `MessageBar`s.

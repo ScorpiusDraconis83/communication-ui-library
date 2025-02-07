@@ -2,15 +2,15 @@
 // Licensed under the MIT License.
 
 import { CameraButton, ControlBarButtonStyles } from '@internal/react-components';
-/* @conditional-compile-remove(capabilities) */
+
 import { _HighContrastAwareIcon } from '@internal/react-components';
 import React, { useMemo } from 'react';
 import { CallControlDisplayType } from '../../../common/types/CommonCallControlOptions';
 import { usePropsFor } from '../../hooks/usePropsFor';
 import { concatButtonBaseStyles } from '../../styles/Buttons.styles';
-/* @conditional-compile-remove(rooms) */ /* @conditional-compile-remove(capabilities) */
-import { useAdapter } from '../../adapter/CallAdapterProvider';
 import { IButton } from '@fluentui/react';
+import { useSelector } from '../../hooks/useSelector';
+import { getCapabilites, getIsRoomsCall, getRole } from '../../selectors/baseSelectors';
 
 /**
  * @private
@@ -20,20 +20,17 @@ export const Camera = (props: {
   styles?: ControlBarButtonStyles;
   splitButtonsForDeviceSelection?: boolean;
   disabled?: boolean;
-  /* @conditional-compile-remove(video-background-effects) */
+
   onClickVideoEffects?: (showVideoEffects: boolean) => void;
   componentRef?: React.RefObject<IButton>;
   disableTooltip?: boolean;
 }): JSX.Element => {
   const cameraButtonProps = usePropsFor(CameraButton);
   const styles = useMemo(() => concatButtonBaseStyles(props.styles ?? {}), [props.styles]);
-  /* @conditional-compile-remove(rooms) */ /* @conditional-compile-remove(capabilities) */
-  const adapter = useAdapter();
-  /* @conditional-compile-remove(rooms) */
-  const isRoomsCall = adapter.getState().isRoomsCall;
+  const isRoomsCall = useSelector(getIsRoomsCall);
+  const role = useSelector(getRole);
 
-  /* @conditional-compile-remove(capabilities) */
-  const turnVideoOnCapability = adapter.getState().call?.capabilitiesFeature?.capabilities.turnVideoOn;
+  const turnVideoOnCapability = useSelector(getCapabilites)?.turnVideoOn;
 
   return (
     <CameraButton
@@ -43,18 +40,12 @@ export const Camera = (props: {
       styles={styles}
       enableDeviceSelectionMenu={props.splitButtonsForDeviceSelection}
       disableTooltip={props.disableTooltip}
-      disabled={
-        cameraButtonProps.disabled ||
-        props.disabled ||
-        /* @conditional-compile-remove(rooms) */ (isRoomsCall && adapter.getState().call?.role === 'Unknown')
-      }
-      /* @conditional-compile-remove(capabilities) */
+      disabled={cameraButtonProps.disabled || props.disabled || !!(isRoomsCall && role === 'Unknown')}
       onRenderOffIcon={
         turnVideoOnCapability && !turnVideoOnCapability.isPresent
           ? () => <_HighContrastAwareIcon disabled={true} iconName={'ControlButtonCameraProhibited'} />
           : undefined
       }
-      /* @conditional-compile-remove(video-background-effects) */
       onClickVideoEffects={props.onClickVideoEffects}
       componentRef={props.componentRef}
     />

@@ -2,7 +2,7 @@
 // Licensed under the MIT License.
 
 import { toFlatCommunicationIdentifier } from '@internal/acs-ui-common';
-import { Page, test as base } from '@playwright/test';
+import { Browser, Page, test as base } from '@playwright/test';
 import path from 'path';
 import { createTestServer } from '../../common/server';
 import { loadNewPageWithPermissionsForCalls } from '../../common/fixtureHelpers';
@@ -12,11 +12,8 @@ import type {
   MockRemoteParticipantState,
   MockVideoStreamRendererViewState
 } from '../../../common';
-/* @conditional-compile-remove(teams-identity-support) */
 import type { CallKind, DominantSpeakersInfo, ParticipantRole } from '@azure/communication-calling';
-/* @conditional-compile-remove(capabilities) */
 import type { ParticipantCapabilities } from '@azure/communication-calling';
-/* @conditional-compile-remove(capabilities) */
 import { CallState, CapabilitiesFeatureState } from '@internal/calling-stateful-client';
 
 const SERVER_URL = 'http://localhost';
@@ -47,7 +44,7 @@ export interface TestFixture {
 }
 
 // eslint-disable-next-line @typescript-eslint/explicit-function-return-type
-const usePage = async ({ browser }, use) => {
+const usePage = async ({ browser }: { browser: Browser }, use: (page: Page) => Promise<void>) => {
   await use(await loadNewPageWithPermissionsForCalls(browser));
 };
 
@@ -58,7 +55,8 @@ export function defaultMockCallAdapterState(
   participants?: MockRemoteParticipantState[],
   role?: ParticipantRole,
   isRoomsCall?: boolean,
-  callEndReasonSubCode?: number
+  callEndReasonSubCode?: number,
+  isReactionCapability?: boolean
 ): MockCallAdapterState {
   const remoteParticipants: Record<string, MockRemoteParticipantState> = {};
   participants?.forEach((p) => {
@@ -75,12 +73,14 @@ export function defaultMockCallAdapterState(
     page: callEndReasonSubCode ? 'leftCall' : 'call',
     call: {
       id: 'call1',
-      /* @conditional-compile-remove(teams-identity-support) */
+
       kind: 'Call' as CallKind,
       callerInfo: { displayName: 'caller', identifier: { kind: 'communicationUser', communicationUserId: '1' } },
       direction: 'Incoming',
       transcription: { isTranscriptionActive: false },
       recording: { isRecordingActive: false },
+      /* @conditional-compile-remove(local-recording-notification) */
+      localRecording: { isLocalRecordingActive: false },
       startTime: new Date(500000000000),
       endTime: new Date(500000000000),
       diagnostics: { network: { latest: {} }, media: { latest: {} } },
@@ -90,8 +90,10 @@ export function defaultMockCallAdapterState(
       isScreenSharingOn: false,
       remoteParticipants,
       remoteParticipantsEnded: {},
-      /** @conditional-compile-remove(raise-hand) */
       raiseHand: { raisedHands: [] },
+      /* @conditional-compile-remove(together-mode) */
+      togetherMode: { isActive: false, streams: {}, seatingPositions: {} },
+      pptLive: { isActive: false },
       role: role ?? 'Unknown',
       dominantSpeakers: dominantSpeakers,
       totalParticipantCount:
@@ -103,18 +105,22 @@ export function defaultMockCallAdapterState(
         currentCaptionLanguage: '',
         currentSpokenLanguage: '',
         isCaptionsFeatureActive: false,
-        startCaptionsInProgress: false
+        startCaptionsInProgress: false,
+        captionsKind: 'Captions'
       },
-      /* @conditional-compile-remove(call-transfer) */
+      /* @conditional-compile-remove(rtt) */
+      realTimeTextFeature: {
+        realTimeTexts: {},
+        isRealTimeTextFeatureActive: false
+      },
       transfer: {
         acceptedTransfers: {}
       },
-      /* @conditional-compile-remove(optimal-video-count) */
       optimalVideoCount: {
         maxRemoteVideoStreams: 4
       },
-      /* @conditional-compile-remove(capabilities) */
-      capabilitiesFeature: role ? getCapabilitiesFromRole(role) : undefined
+
+      capabilitiesFeature: getCapabilitiesFromRole(role, isReactionCapability)
     },
     endedCall: callEndReasonSubCode
       ? {
@@ -122,7 +128,8 @@ export function defaultMockCallAdapterState(
           callEndReason: {
             code: 0,
             subCode: callEndReasonSubCode,
-            /* @conditional-compile-remove(calling-beta-sdk) */ resultCategories: []
+            /* @conditional-compile-remove(calling-beta-sdk) */ resultCategories: [],
+            /* @conditional-compile-remove(calling-beta-sdk) */ message: ''
           }
         }
       : undefined,
@@ -144,8 +151,13 @@ export function defaultMockCallAdapterState(
       deviceAccess: { video: true, audio: true }
     },
     isTeamsCall: false,
+    isTeamsMeeting: false,
     isRoomsCall: isRoomsCall ?? false,
-    latestErrors: {}
+    latestErrors: {},
+    /* @conditional-compile-remove(breakout-rooms) */
+    latestNotifications: {},
+    targetCallees: undefined,
+    reactions: undefined
   };
 }
 
@@ -227,7 +239,7 @@ export function addVideoStream(
   scalingMode?: 'Stretch' | 'Crop' | 'Fit'
 ): void {
   const streams = Object.values(participant.videoStreams).filter((s) => s.mediaStreamType === 'Video');
-  if (streams.length !== 1) {
+  if (streams.length !== 1 || !streams[0]) {
     throw new Error(`Expected 1 video stream for ${participant.displayName}, got ${streams.length}`);
   }
   addDummyView(streams[0], isReceiving, scalingMode);
@@ -244,7 +256,7 @@ export function addScreenshareStream(
   scalingMode?: 'Stretch' | 'Crop' | 'Fit'
 ): void {
   const streams = Object.values(participant.videoStreams).filter((s) => s.mediaStreamType === 'ScreenSharing');
-  if (streams.length !== 1) {
+  if (streams.length !== 1 || !streams[0]) {
     throw new Error(`Expected 1 screenshare stream for ${participant.displayName}, got ${streams.length}`);
   }
   addDummyView(streams[0], isReceiving, scalingMode);
@@ -308,29 +320,39 @@ export const stubLocalCameraName = async (page: Page): Promise<void> => {
   });
 };
 
-/* @conditional-compile-remove(capabilities) */
-const getCapabilitiesFromRole = (role: ParticipantRole): CapabilitiesFeatureState => {
+const getCapabilitiesFromRole = (
+  role?: ParticipantRole,
+  isReactionCapability?: boolean
+): CapabilitiesFeatureState | undefined => {
+  if (isReactionCapability) {
+    return {
+      capabilities: presenterCapabilitiesInTeamsCall(),
+      latestCapabilitiesChangeInfo: { oldValue: {}, newValue: {}, reason: 'RoleChanged' }
+    };
+  }
+
   switch (role) {
     case 'Attendee':
       return {
-        capabilities: attendeeCapabilitiesInRoomsCall,
+        capabilities: attendeeCapabilitiesInRoomsCall(),
         latestCapabilitiesChangeInfo: { oldValue: {}, newValue: {}, reason: 'RoleChanged' }
       };
     case 'Consumer':
       return {
-        capabilities: consumerCapabilitiesInRoomsCall,
+        capabilities: consumerCapabilitiesInRoomsCall(),
+        latestCapabilitiesChangeInfo: { oldValue: {}, newValue: {}, reason: 'RoleChanged' }
+      };
+    case 'Presenter':
+      return {
+        capabilities: presenterCapabilitiesInRoomsCall(),
         latestCapabilitiesChangeInfo: { oldValue: {}, newValue: {}, reason: 'RoleChanged' }
       };
     default:
-      return {
-        capabilities: presenterCapabilitiesInRoomsCall,
-        latestCapabilitiesChangeInfo: { oldValue: {}, newValue: {}, reason: 'RoleChanged' }
-      };
+      return undefined;
   }
 };
 
-/* @conditional-compile-remove(capabilities) */
-const consumerCapabilitiesInRoomsCall: ParticipantCapabilities = {
+const consumerCapabilitiesInRoomsCall = (): ParticipantCapabilities => ({
   addCommunicationUser: { isPresent: false, reason: 'CapabilityNotApplicableForTheCallType' },
   addPhoneNumber: { isPresent: false, reason: 'CapabilityNotApplicableForTheCallType' },
   addTeamsUser: { isPresent: false, reason: 'CapabilityNotApplicableForTheCallType' },
@@ -344,21 +366,43 @@ const consumerCapabilitiesInRoomsCall: ParticipantCapabilities = {
   removeParticipantsSpotlight: { isPresent: false, reason: 'CapabilityNotApplicableForTheCallType' },
   shareScreen: { isPresent: false, reason: 'RoleRestricted' },
   spotlightParticipant: { isPresent: false, reason: 'CapabilityNotApplicableForTheCallType' },
-  startLiveCaptions: { isPresent: false, reason: 'CapabilityNotApplicableForTheCallType' },
-  stopLiveCaptions: { isPresent: false, reason: 'CapabilityNotApplicableForTheCallType' },
+  startLiveCallingCaptions: { isPresent: false, reason: 'CapabilityNotApplicableForTheCallType' },
   turnVideoOn: { isPresent: false, reason: 'RoleRestricted' },
   muteOthers: {
     isPresent: false,
     reason: 'CapabilityNotApplicableForTheCallType'
   },
   useReactions: {
+    isPresent: true,
+    reason: 'Capable'
+  },
+  viewAttendeeNames: {
+    isPresent: true,
+    reason: 'Capable'
+  },
+  startLiveMeetingCaptions: {
+    isPresent: false,
+    reason: 'CapabilityNotApplicableForTheCallType'
+  },
+  setCaptionLanguage: {
+    isPresent: false,
+    reason: 'CapabilityNotApplicableForTheCallType'
+  },
+  /* @conditional-compile-remove(calling-beta-sdk) */
+  startTogetherMode: { isPresent: false, reason: 'CapabilityNotApplicableForTheCallType' },
+  /* @conditional-compile-remove(breakout-rooms) */
+  joinBreakoutRooms: { isPresent: false, reason: 'CapabilityNotApplicableForTheCallType' },
+  forbidOthersAudio: {
+    isPresent: false,
+    reason: 'CapabilityNotApplicableForTheCallType'
+  },
+  forbidOthersVideo: {
     isPresent: false,
     reason: 'CapabilityNotApplicableForTheCallType'
   }
-};
+});
 
-/* @conditional-compile-remove(capabilities) */
-const attendeeCapabilitiesInRoomsCall: ParticipantCapabilities = {
+const attendeeCapabilitiesInRoomsCall = (): ParticipantCapabilities => ({
   addCommunicationUser: { isPresent: false, reason: 'CapabilityNotApplicableForTheCallType' },
   addPhoneNumber: { isPresent: false, reason: 'CapabilityNotApplicableForTheCallType' },
   addTeamsUser: { isPresent: false, reason: 'CapabilityNotApplicableForTheCallType' },
@@ -372,21 +416,43 @@ const attendeeCapabilitiesInRoomsCall: ParticipantCapabilities = {
   removeParticipantsSpotlight: { isPresent: false, reason: 'CapabilityNotApplicableForTheCallType' },
   shareScreen: { isPresent: false, reason: 'RoleRestricted' },
   spotlightParticipant: { isPresent: false, reason: 'CapabilityNotApplicableForTheCallType' },
-  startLiveCaptions: { isPresent: false, reason: 'CapabilityNotApplicableForTheCallType' },
-  stopLiveCaptions: { isPresent: false, reason: 'CapabilityNotApplicableForTheCallType' },
+  startLiveCallingCaptions: { isPresent: false, reason: 'CapabilityNotApplicableForTheCallType' },
+  startLiveMeetingCaptions: {
+    isPresent: false,
+    reason: 'CapabilityNotApplicableForTheCallType'
+  },
   turnVideoOn: { isPresent: true, reason: 'Capable' },
   muteOthers: {
     isPresent: false,
     reason: 'CapabilityNotApplicableForTheCallType'
   },
   useReactions: {
+    isPresent: true,
+    reason: 'Capable'
+  },
+  viewAttendeeNames: {
+    isPresent: true,
+    reason: 'Capable'
+  },
+  setCaptionLanguage: {
+    isPresent: false,
+    reason: 'CapabilityNotApplicableForTheCallType'
+  },
+  /* @conditional-compile-remove(calling-beta-sdk) */
+  startTogetherMode: { isPresent: false, reason: 'CapabilityNotApplicableForTheCallType' },
+  /* @conditional-compile-remove(breakout-rooms) */
+  joinBreakoutRooms: { isPresent: false, reason: 'CapabilityNotApplicableForTheCallType' },
+  forbidOthersAudio: {
+    isPresent: false,
+    reason: 'CapabilityNotApplicableForTheCallType'
+  },
+  forbidOthersVideo: {
     isPresent: false,
     reason: 'CapabilityNotApplicableForTheCallType'
   }
-};
+});
 
-/* @conditional-compile-remove(capabilities) */
-const presenterCapabilitiesInRoomsCall: ParticipantCapabilities = {
+const presenterCapabilitiesInRoomsCall = (): ParticipantCapabilities => ({
   addCommunicationUser: { isPresent: false, reason: 'CapabilityNotApplicableForTheCallType' },
   addPhoneNumber: { isPresent: false, reason: 'CapabilityNotApplicableForTheCallType' },
   addTeamsUser: { isPresent: false, reason: 'CapabilityNotApplicableForTheCallType' },
@@ -396,31 +462,106 @@ const presenterCapabilitiesInRoomsCall: ParticipantCapabilities = {
   unmuteMic: { isPresent: true, reason: 'Capable' },
   pstnDialOut: { isPresent: false, reason: 'CapabilityNotApplicableForTheCallType' },
   raiseHand: { isPresent: false, reason: 'CapabilityNotApplicableForTheCallType' },
-  removeParticipant: { isPresent: false, reason: 'CapabilityNotApplicableForTheCallType' },
+  removeParticipant: { isPresent: true, reason: 'Capable' },
   removeParticipantsSpotlight: { isPresent: false, reason: 'CapabilityNotApplicableForTheCallType' },
   shareScreen: { isPresent: true, reason: 'Capable' },
   spotlightParticipant: { isPresent: false, reason: 'CapabilityNotApplicableForTheCallType' },
-  startLiveCaptions: { isPresent: false, reason: 'CapabilityNotApplicableForTheCallType' },
-  stopLiveCaptions: { isPresent: false, reason: 'CapabilityNotApplicableForTheCallType' },
-  turnVideoOn: { isPresent: true, reason: 'Capable' },
-  muteOthers: {
+  startLiveCallingCaptions: { isPresent: false, reason: 'CapabilityNotApplicableForTheCallType' },
+  startLiveMeetingCaptions: {
     isPresent: false,
     reason: 'CapabilityNotApplicableForTheCallType'
+  },
+  setCaptionLanguage: {
+    isPresent: false,
+    reason: 'CapabilityNotApplicableForTheCallType'
+  },
+  turnVideoOn: { isPresent: true, reason: 'Capable' },
+  muteOthers: {
+    isPresent: true,
+    reason: 'Capable'
+  },
+  useReactions: {
+    isPresent: true,
+    reason: 'Capable'
+  },
+  viewAttendeeNames: {
+    isPresent: true,
+    reason: 'Capable'
+  },
+  /* @conditional-compile-remove(calling-beta-sdk) */
+  startTogetherMode: { isPresent: false, reason: 'CapabilityNotApplicableForTheCallType' },
+  /* @conditional-compile-remove(breakout-rooms) */
+  joinBreakoutRooms: { isPresent: false, reason: 'CapabilityNotApplicableForTheCallType' },
+  forbidOthersAudio: {
+    isPresent: false,
+    reason: 'CapabilityNotApplicableForTheCallType'
+  },
+  forbidOthersVideo: {
+    isPresent: false,
+    reason: 'CapabilityNotApplicableForTheCallType'
+  }
+});
+
+const presenterCapabilitiesInTeamsCall = (): ParticipantCapabilities => ({
+  addCommunicationUser: { isPresent: false, reason: 'CapabilityNotApplicableForTheCallType' },
+  addPhoneNumber: { isPresent: false, reason: 'CapabilityNotApplicableForTheCallType' },
+  addTeamsUser: { isPresent: false, reason: 'CapabilityNotApplicableForTheCallType' },
+  blurBackground: { isPresent: false, reason: 'CapabilityNotApplicableForTheCallType' },
+  hangUpForEveryOne: { isPresent: false, reason: 'CapabilityNotApplicableForTheCallType' },
+  manageLobby: { isPresent: false, reason: 'CapabilityNotApplicableForTheCallType' },
+  unmuteMic: { isPresent: true, reason: 'Capable' },
+  pstnDialOut: { isPresent: false, reason: 'CapabilityNotApplicableForTheCallType' },
+  raiseHand: { isPresent: false, reason: 'CapabilityNotApplicableForTheCallType' },
+  removeParticipant: { isPresent: true, reason: 'Capable' },
+  removeParticipantsSpotlight: { isPresent: false, reason: 'CapabilityNotApplicableForTheCallType' },
+  shareScreen: { isPresent: true, reason: 'Capable' },
+  spotlightParticipant: { isPresent: false, reason: 'CapabilityNotApplicableForTheCallType' },
+  startLiveCallingCaptions: { isPresent: true, reason: 'Capable' },
+  startLiveMeetingCaptions: {
+    isPresent: true,
+    reason: 'Capable'
+  },
+  setCaptionLanguage: {
+    isPresent: true,
+    reason: 'Capable'
+  },
+  turnVideoOn: { isPresent: true, reason: 'Capable' },
+  muteOthers: {
+    isPresent: true,
+    reason: 'Capable'
   },
   useReactions: {
     isPresent: false,
     reason: 'CapabilityNotApplicableForTheCallType'
+  },
+  viewAttendeeNames: {
+    isPresent: true,
+    reason: 'Capable'
+  },
+  /* @conditional-compile-remove(calling-beta-sdk) */
+  startTogetherMode: { isPresent: true, reason: 'Capable' },
+  /* @conditional-compile-remove(breakout-rooms) */
+  joinBreakoutRooms: { isPresent: true, reason: 'Capable' },
+  forbidOthersAudio: {
+    isPresent: true,
+    reason: 'CapabilityNotApplicableForTheCallType'
+  },
+  forbidOthersVideo: {
+    isPresent: true,
+    reason: 'CapabilityNotApplicableForTheCallType'
   }
-};
+});
 
 const defaultEndedCallState: CallState = {
   id: 'call0',
-  /* @conditional-compile-remove(teams-identity-support) */
+
   kind: 'Call' as CallKind,
   callerInfo: { displayName: 'caller', identifier: { kind: 'communicationUser', communicationUserId: '1' } },
   direction: 'Incoming',
   transcription: { isTranscriptionActive: false },
   recording: { isRecordingActive: false },
+  /* @conditional-compile-remove(local-recording-notification) */
+  localRecording: { isLocalRecordingActive: false },
   startTime: new Date(500000000000),
   endTime: new Date(500000000000),
   diagnostics: { network: { latest: {} }, media: { latest: {} } },
@@ -430,8 +571,10 @@ const defaultEndedCallState: CallState = {
   isScreenSharingOn: false,
   remoteParticipants: {},
   remoteParticipantsEnded: {},
-  /** @conditional-compile-remove(raise-hand) */
   raiseHand: { raisedHands: [] },
+  /* @conditional-compile-remove(together-mode) */
+  togetherMode: { isActive: false, streams: {}, seatingPositions: {} },
+  pptLive: { isActive: false },
   captionsFeature: {
     captions: [],
     supportedSpokenLanguages: [],
@@ -439,13 +582,18 @@ const defaultEndedCallState: CallState = {
     currentCaptionLanguage: '',
     currentSpokenLanguage: '',
     isCaptionsFeatureActive: false,
-    startCaptionsInProgress: false
+    startCaptionsInProgress: false,
+
+    captionsKind: 'Captions'
   },
-  /* @conditional-compile-remove(call-transfer) */
+  /* @conditional-compile-remove(rtt) */
+  realTimeTextFeature: {
+    realTimeTexts: {},
+    isRealTimeTextFeatureActive: false
+  },
   transfer: {
     acceptedTransfers: {}
   },
-  /* @conditional-compile-remove(optimal-video-count) */
   optimalVideoCount: {
     maxRemoteVideoStreams: 4
   }

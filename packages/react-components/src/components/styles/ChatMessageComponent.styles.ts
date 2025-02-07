@@ -58,19 +58,27 @@ export const iconWrapperStyle = (theme: ITheme, isSubMenuOpen: boolean): IIconSt
 /**
  * @private
  */
-export const chatMessageDateStyle = mergeStyles({
-  color: tokens.colorNeutralForeground2,
-  fontWeight: FontWeights.regular,
-  fontSize: '0.75rem'
-});
+export const chatMessageDateStyle = (theme: Theme): string =>
+  mergeStyles({
+    color: theme.palette.neutralSecondary,
+    fontWeight: FontWeights.regular,
+    fontSize: '0.75rem'
+  });
 
 /**
  * @private
  */
-export const chatMessageAuthorStyle = mergeStyles({
-  fontWeight: FontWeights.semibold,
-  fontSize: '0.75rem'
-});
+export const chatMessageAuthorStyle = mergeStyles({ fontWeight: FontWeights.semibold, fontSize: '0.75rem' });
+
+/**
+ * @private
+ */
+export const chatMessageDateFailedStyle = (theme: Theme): string =>
+  mergeStyles({
+    color: theme.palette.neutralPrimaryAlt,
+    fontWeight: FontWeights.regular,
+    fontSize: '0.75rem'
+  });
 
 /**
  * @private
@@ -118,16 +126,14 @@ export const chatMessageMenuStyle = mergeStyles({
   minWidth: '8.5rem',
   height: 'max-content',
   cursor: 'pointer',
-  overflow: 'hidden'
+  overflow: 'hidden',
+  '-webkit-tap-highlight-color': 'transparent' // Disable tap highlight on Android
 });
 
 /**
  * @private
  */
 export const useChatMessageEditContainerStyles = makeStyles({
-  root: {
-    paddingTop: '1.25rem' //height of the menu button + marginBottom
-  },
   body: {
     ...shorthands.padding(0),
     backgroundColor: 'transparent',
@@ -136,14 +142,23 @@ export const useChatMessageEditContainerStyles = makeStyles({
     ...shorthands.borderRadius(tokens.borderRadiusMedium),
     // The border thickness changes on hover, to prevent the border thickness change causing the
     // input box to shift we apply a margin to compensate. This margin is then removed on hover when the border is thicker.
-    ...shorthands.margin(`${defaultSendBoxActiveBorderThicknessREM - defaultSendBoxInactiveBorderThicknessREM}rem`),
+    ...shorthands.margin('21px', '1px', '1px', '1px'),
     // Width should be updated on hover to include the border width change
     width: `calc(100% - ${defaultSendBoxActiveBorderThicknessREM}rem)`,
-
     '&:hover, &:active, &:focus, &:focus-within': {
-      ...shorthands.margin('0rem'),
       ...shorthands.borderWidth(`${defaultSendBoxActiveBorderThicknessREM}rem`),
+      ...shorthands.margin('20px', 0, 0, 0),
       width: '100%'
+    }
+  },
+  bodyAttached: {
+    marginBottom: '1px',
+    marginTop: '3px',
+    // Width should be updated on hover to include the border width change
+    width: `calc(100% - ${defaultSendBoxActiveBorderThicknessREM}rem)`,
+    '&:hover, &:active, &:focus, &:focus-within': {
+      marginTop: '2px',
+      marginBottom: 0
     }
   },
   bodyError: {
@@ -154,6 +169,22 @@ export const useChatMessageEditContainerStyles = makeStyles({
     '&:hover, &:active, &:focus, &:focus-within': {
       ...shorthands.borderColor(tokens.colorCompoundBrandStroke)
     }
+  }
+});
+
+/**
+ * @private
+ */
+export const useChatMessageRichTextEditContainerStyles = makeStyles({
+  body: {
+    ...shorthands.padding(0),
+    backgroundColor: 'transparent',
+    ...shorthands.margin('1.25rem', 0, 0, 0),
+    width: '100%'
+  },
+  bodyAttached: {
+    marginTop: '0.125rem',
+    marginBottom: 0
   }
 });
 

@@ -1,9 +1,11 @@
 // Copyright (c) Microsoft Corporation.
 // Licensed under the MIT License.
 
-import { IButtonStyles, IStyle, mergeStyles, Theme, ITheme } from '@fluentui/react';
-/* @conditional-compile-remove(reaction) */
+import { IButtonStyles, IStyle, mergeStyles, Theme, ITheme, ISpinnerStyles } from '@fluentui/react';
 import { keyframes, memoizeFunction } from '@fluentui/react';
+import { REACTION_SCREEN_SHARE_ANIMATION_TIME_MS } from '../VideoGallery/utils/reactionUtils';
+import { isDarkThemed } from '../../theming/themeUtils';
+
 /**
  * @private
  */
@@ -12,6 +14,13 @@ export const rootStyles: IStyle = {
   height: '100%',
   width: '100%'
 };
+
+/** @private */
+export const videoTileHighContrastStyles = (theme: ITheme): IStyle => ({
+  '@media (forced-colors: active)': {
+    border: `0.125rem solid ${theme.palette.black}`
+  }
+});
 
 /**
  * @private
@@ -66,14 +75,6 @@ export const disabledVideoHint = mergeStyles({
 /**
  * @private
  */
-export const videoHint = mergeStyles(disabledVideoHint, {
-  // This will appear on top of the video stream, so no dependency on theme and explicitly use a translucent white
-  backgroundColor: 'rgba(255,255,255,0.8)'
-});
-
-/**
- * @private
- */
 export const displayNameStyle: IStyle = {
   padding: '0.1rem',
   fontSize: '0.75rem',
@@ -96,7 +97,7 @@ export const pinIconStyle: IStyle = {
  * @private
  */
 export const iconContainerStyle: IStyle = {
-  margin: 'auto',
+  margin: 'auto 0.2rem',
   alignItems: 'center',
   '& svg': {
     display: 'block',
@@ -124,24 +125,29 @@ export const participantStateStringStyles = (theme: Theme): IStyle => {
 /**
  * @private
  */
-export const moreButtonStyles: IButtonStyles = {
-  root: {
-    // To ensure that the button is clickable when there is a floating video tile
-    zIndex: 1,
-    color: 'inherit',
-    top: '-0.125rem',
-    height: '100%',
-    padding: '0rem'
-  },
-  rootHovered: {
-    background: 'none'
-  },
-  rootPressed: {
-    background: 'none'
-  },
-  rootExpanded: {
-    background: 'none'
-  }
+export const moreButtonStyles = (theme: Theme): IButtonStyles => {
+  return {
+    root: {
+      // To ensure that the button is clickable when there is a floating video tile
+      zIndex: 1,
+      top: '-0.125rem',
+      height: '100%',
+      padding: '0rem'
+    },
+    rootHovered: {
+      background: 'none'
+    },
+    rootPressed: {
+      background: 'none'
+    },
+    icon: {
+      color: theme.palette.neutralPrimary
+    },
+    iconExpanded: {
+      background: 'none',
+      color: theme.palette.themePrimary
+    }
+  };
 };
 
 /**
@@ -157,7 +163,9 @@ export const raiseHandContainerStyles = (theme: ITheme, limitedSpace: boolean): 
       borderRadius: '1rem',
       margin: '0.5rem',
       width: 'fit-content',
-      position: 'absolute'
+      position: 'absolute',
+      top: 0,
+      height: 'fit-content'
     },
     limitedSpace && raiseHandLimitedSpaceStyles
   );
@@ -175,39 +183,91 @@ export const raiseHandLimitedSpaceStyles: IStyle = {
   bottom: 0
 };
 
-/* @conditional-compile-remove(reaction) */
 /**
  * @private
  */
-export const playFrames = memoizeFunction(() =>
+export const playFrames = memoizeFunction((frameHightPx: number, frameCount: number) =>
   keyframes({
     from: {
-      backgroundPosition: '0px 8568px'
+      backgroundPosition: `0px 0px`
     },
     to: {
-      backgroundPosition: '0px 0px'
+      backgroundPosition: `0px ${frameCount * -frameHightPx}px`
     }
   })
 );
 
-/* @conditional-compile-remove(reaction) */
 /**
  * @private
  */
-export const reactionRenderingStyle = (args: { backgroundImageUrl?: string; personaSize: number }): string =>
-  mergeStyles({
-    height: '100%',
-    width: '100%',
+export const reactionRenderingStyle = (args: {
+  spriteImageUrl: string;
+  emojiSize: number;
+  rawFrameSize: number;
+  frameCount: number;
+}): string => {
+  const imageUrl = `url(${args.spriteImageUrl})`;
+  const steps = args.frameCount ?? 0;
+  const frameSizePx = args.rawFrameSize;
+  return mergeStyles({
+    height: `${frameSizePx}px`,
+    width: `${frameSizePx}px`,
     overflow: 'hidden',
-    animationName: playFrames(),
-    backgroundImage: args.backgroundImageUrl,
-    animationDuration: '5.12s',
-    animationTimingFunction: `steps(102)`,
-    backgroundSize: `cover`,
+    animationName: playFrames(frameSizePx, steps),
+    backgroundImage: imageUrl,
+    animationDuration: `${REACTION_SCREEN_SHARE_ANIMATION_TIME_MS / 1000}s`,
+    animationTimingFunction: `steps(${steps})`,
     animationPlayState: 'running',
     animationIterationCount: 'infinite',
+
+    // Scale the emoji to fit the parent container
+    transform: `scale(${args.emojiSize / frameSizePx})`,
+    transformOrigin: 'top left'
+  });
+};
+
+/**
+ * @private
+ */
+export const loadSpinnerStyles = (theme: ITheme, isOverLay: boolean): ISpinnerStyles => {
+  return {
+    circle: {
+      width: '2rem',
+      height: '2rem'
+    },
+    label: {
+      fontSize: '1rem',
+      color: isOverLay ? (isDarkThemed(theme) ? theme.palette.black : theme.palette.white) : theme.palette.themeDarkAlt
+    }
+  };
+};
+
+/**
+ * @private
+ */
+export const overlayStyles = (): IStyle => {
+  return {
+    display: 'flex',
     justifyContent: 'center',
     alignItems: 'center',
-    backgroundPosition: `center`,
-    transform: `scale(${84 < args.personaSize ? 84 / args.personaSize : args.personaSize / 84})`
-  });
+    backgroundColor: 'rgba(0, 0, 0, 0.3)'
+  };
+};
+
+/**
+ * @private
+ */
+export const overlayStylesTransparent = (): IStyle => {
+  return {
+    display: 'flex',
+    justifyContent: 'center',
+    alignItems: 'center'
+  };
+};
+
+/**
+ * @private
+ */
+export const iconsGroupContainerStyle: IStyle = {
+  marginLeft: '0.2rem'
+};

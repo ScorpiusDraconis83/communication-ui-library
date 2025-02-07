@@ -29,6 +29,23 @@ export const loadingSpinnerContainer = (): string =>
 /**
  * @private
  */
+export const reconnectingContainer = (): string =>
+  mergeStyles({
+    // Position centrally on top of content. Parent must have position: relative.
+    position: 'absolute',
+    top: '0',
+    bottom: '0',
+    left: '0',
+    right: '0',
+    background: 'rgba(0, 0, 0, 0.55)',
+    display: 'flex',
+    justifyContent: 'center',
+    alignItems: 'center'
+  });
+
+/**
+ * @private
+ */
 export const loadSpinnerStyles: ISpinnerStyles = {
   root: {
     height: '100%' // ensure height fills container
@@ -41,6 +58,21 @@ export const loadSpinnerStyles: ISpinnerStyles = {
     borderWidth: '0.25em'
   }
 };
+
+/**
+ * @private
+ */
+export const reconnectSpinnerStyles = (): ISpinnerStyles => ({
+  ...loadSpinnerStyles,
+  label: {
+    color: 'white'
+  },
+  circle: {
+    ...(loadSpinnerStyles.circle as object),
+    maxHeight: '2rem',
+    borderWidth: 'unset'
+  }
+});
 
 /**
  * @private

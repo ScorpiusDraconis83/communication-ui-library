@@ -4,36 +4,36 @@
 export type { CallingBaseSelectorProps } from './baseSelectors';
 export * from './callControlSelectors';
 export { createDefaultCallingHandlers } from './handlers/createHandlers';
-/* @conditional-compile-remove(teams-identity-support) */
+
 export { createDefaultTeamsCallingHandlers } from './handlers/createTeamsCallHandlers';
 export type { ParticipantListSelector } from './participantListSelector';
 export type { ParticipantsButtonSelector } from './participantsButtonSelector';
 export type { VideoGallerySelector } from './videoGallerySelector';
 export type { ErrorBarSelector } from './errorBarSelector';
-/* @conditional-compile-remove(PSTN-calls) */
+
+export type { NotificationStackSelector } from './notificationStackSelector';
+
+export { notificationStackSelector } from './notificationStackSelector';
 export type { HoldButtonSelector } from './callControlSelectors';
+export type { IncomingCallStackSelector } from './incomingCallStackSelector';
+export { incomingCallStackSelector } from './incomingCallStackSelector';
 
-/* @conditional-compile-remove(close-captions) */
-export type {
-  _StartCaptionsButtonSelector,
-  _CaptionSettingsSelector,
-  _CaptionsBannerSelector
-} from './captionsSelector';
+export type { StartCaptionsButtonSelector, CaptionSettingsSelector, CaptionsBannerSelector } from './captionsSelector';
 
-/* @conditional-compile-remove(close-captions) */
-export { _captionsBannerSelector, _startCaptionsButtonSelector, _captionSettingsSelector } from './captionsSelector';
+export { captionsBannerSelector, startCaptionsButtonSelector, captionSettingsSelector } from './captionsSelector';
 
 export type { CallingHandlers, CreateDefaultCallingHandlers } from './handlers/createHandlers';
-/* @conditional-compile-remove(teams-identity-support) */
+
 export type { TeamsCallingHandlers } from './handlers/createTeamsCallHandlers';
 export type { CommonCallingHandlers } from './handlers/createCommonHandlers';
-/* @conditional-compile-remove(close-captions) */
-export type { CaptionsOptions } from './handlers/createCommonHandlers';
-/* @conditional-compile-remove(video-background-effects) */
-export type { VideoBackgroundEffectsDependency } from './handlers/createCommonHandlers';
-/* @conditional-compile-remove(video-background-effects) */
-export type { CallingHandlersOptions } from './handlers/createHandlers';
-/* @conditional-compile-remove(teams-identity-support) */
+
+export type {
+  DeepNoiseSuppressionEffectDependency,
+  VideoBackgroundEffectsDependency
+} from './handlers/createCommonHandlers';
+
+export type { _ComponentCallingHandlers, CallingHandlersOptions } from './handlers/createHandlers';
+
 export { useTeamsCall, useTeamsCallAgent } from './providers';
 
 export {
@@ -53,10 +53,13 @@ export type { GetSelector as GetCallingSelector, EmptySelector } from './hooks/u
 export { useSelector as useCallingSelector } from './hooks/useSelector';
 export { useHandlers as useCallingHandlers } from './hooks/useHandlers';
 
-export { _isInCall, _isPreviewOn, _isInLobbyOrConnecting } from './utils/callUtils';
-/* @conditional-compile-remove(PSTN-calls) */
-export { _updateUserDisplayNames } from './utils/callUtils';
-/* @conditional-compile-remove(unsupported-browser) */
-export { _getEnvironmentInfo } from './utils/callUtils';
+export {
+  _isInCall,
+  _isPreviewOn,
+  _isInLobbyOrConnecting,
+  _updateUserDisplayNames,
+  _getEnvironmentInfo
+} from './utils/callUtils';
 
 export { _videoGalleryRemoteParticipantsMemo, _dominantSpeakersWithFlatId } from './utils/videoGalleryUtils';
+export type { _VideoGalleryRemoteParticipantsMemoFn } from './utils/videoGalleryUtils';

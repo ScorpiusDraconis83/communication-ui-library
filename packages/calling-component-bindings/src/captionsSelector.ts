@@ -1,11 +1,19 @@
 // Copyright (c) Microsoft Corporation.
 // Licensed under the MIT License.
 
-/* @conditional-compile-remove(close-captions) */
 import { CallClientState, CaptionsInfo } from '@internal/calling-stateful-client';
-/* @conditional-compile-remove(close-captions) */
-import { CallingBaseSelectorProps, getStartCaptionsInProgress, getSupportedCaptionLanguages } from './baseSelectors';
-/* @conditional-compile-remove(close-captions) */
+/* @conditional-compile-remove(rtt) */
+import { RealTimeTextInfo, RemoteParticipantState } from '@internal/calling-stateful-client';
+import {
+  CallingBaseSelectorProps,
+  getDisplayName,
+  getIdentifier,
+  getRemoteParticipants,
+  getStartCaptionsInProgress,
+  getSupportedCaptionLanguages
+} from './baseSelectors';
+/* @conditional-compile-remove(rtt) */
+import { getRealTimeTextStatus, getRealTimeText } from './baseSelectors';
 import {
   getCaptions,
   getCaptionsStatus,
@@ -13,19 +21,17 @@ import {
   getCurrentSpokenLanguage,
   getSupportedSpokenLanguages
 } from './baseSelectors';
-/* @conditional-compile-remove(close-captions) */
 import * as reselect from 'reselect';
-/* @conditional-compile-remove(close-captions) */
 import { toFlatCommunicationIdentifier } from '@internal/acs-ui-common';
-/* @conditional-compile-remove(close-captions) */
-import { _CaptionsInfo } from '@internal/react-components';
+import { CaptionsInformation, SupportedCaptionLanguage, SupportedSpokenLanguage } from '@internal/react-components';
+/* @conditional-compile-remove(rtt) */
+import { RealTimeTextInformation } from '@internal/react-components';
 
-/* @conditional-compile-remove(close-captions) */
 /**
  * Selector type for the {@link StartCaptionsButton} component.
- * @internal
+ * @public
  */
-export type _StartCaptionsButtonSelector = (
+export type StartCaptionsButtonSelector = (
   state: CallClientState,
   props: CallingBaseSelectorProps
 ) => {
@@ -34,13 +40,12 @@ export type _StartCaptionsButtonSelector = (
   currentSpokenLanguage: string;
 };
 
-/* @conditional-compile-remove(close-captions) */
 /**
  * Selector for {@link StartCaptionsButton} component.
  *
- * @internal
+ * @public
  */
-export const _startCaptionsButtonSelector: _StartCaptionsButtonSelector = reselect.createSelector(
+export const startCaptionsButtonSelector: StartCaptionsButtonSelector = reselect.createSelector(
   [getCaptionsStatus, getCurrentCaptionLanguage, getCurrentSpokenLanguage],
   (isCaptionsFeatureActive, currentCaptionLanguage, currentSpokenLanguage) => {
     return {
@@ -51,29 +56,27 @@ export const _startCaptionsButtonSelector: _StartCaptionsButtonSelector = resele
   }
 );
 
-/* @conditional-compile-remove(close-captions) */
 /**
  * Selector type for components for Changing caption language and spoken language
- * @internal
+ * @public
  */
-export type _CaptionSettingsSelector = (
+export type CaptionSettingsSelector = (
   state: CallClientState,
   props: CallingBaseSelectorProps
 ) => {
-  supportedCaptionLanguages: string[];
-  currentCaptionLanguage: string;
-  supportedSpokenLanguages: string[];
-  currentSpokenLanguage: string;
+  supportedCaptionLanguages: SupportedCaptionLanguage[];
+  currentCaptionLanguage: SupportedCaptionLanguage;
+  supportedSpokenLanguages: SupportedSpokenLanguage[];
+  currentSpokenLanguage: SupportedSpokenLanguage;
   isCaptionsFeatureActive: boolean;
 };
 
-/* @conditional-compile-remove(close-captions) */
 /**
  * Selector for Changing caption language and spoken language
  *
- * @internal
+ * @public
  */
-export const _captionSettingsSelector: _CaptionSettingsSelector = reselect.createSelector(
+export const captionSettingsSelector: CaptionSettingsSelector = reselect.createSelector(
   [
     getSupportedCaptionLanguages,
     getCurrentCaptionLanguage,
@@ -90,71 +93,190 @@ export const _captionSettingsSelector: _CaptionSettingsSelector = reselect.creat
   ) => {
     return {
       supportedCaptionLanguages: supportedCaptionLanguages ?? [],
-      currentCaptionLanguage: currentCaptionLanguage ?? '',
+      currentCaptionLanguage: currentCaptionLanguage ?? 'en',
       supportedSpokenLanguages: supportedSpokenLanguages ?? ['en-us'],
       currentSpokenLanguage: currentSpokenLanguage ?? 'en-us',
       isCaptionsFeatureActive: isCaptionsFeatureActive ?? false
     };
   }
 );
-/* @conditional-compile-remove(close-captions) */
 /**
  * Selector type for the {@link CaptionsBanner} component.
- * @internal
+ * @public
  */
-export type _CaptionsBannerSelector = (
+export type CaptionsBannerSelector = (
   state: CallClientState,
   props: CallingBaseSelectorProps
 ) => {
-  captions: _CaptionsInfo[];
+  captions: CaptionsInformation[];
+  /* @conditional-compile-remove(rtt) */
+  realTimeTexts: {
+    completedMessages?: RealTimeTextInformation[];
+    currentInProgress?: RealTimeTextInformation[];
+    myInProgress?: RealTimeTextInformation;
+  };
   isCaptionsOn: boolean;
+  startCaptionsInProgress: boolean;
+  /* @conditional-compile-remove(rtt) */
+  isRealTimeTextOn: boolean;
+  /* @conditional-compile-remove(rtt) */
+  latestLocalRealTimeText: RealTimeTextInformation;
 };
 
-/* @conditional-compile-remove(close-captions) */
 /**
  * Selector for {@link CaptionsBanner} component.
  *
- * @internal
+ * @public
  */
-export const _captionsBannerSelector: _CaptionsBannerSelector = reselect.createSelector(
-  [getCaptions, getCaptionsStatus, getStartCaptionsInProgress],
-  (captions, isCaptionsFeatureActive, startCaptionsInProgress) => {
-    // Following Teams app logic, no matter how many 'Partial' captions come,
-    // we only pick first one according to start time, and all the other partial captions will be filtered out
-    // This will give customers a stable captions experience when others talking over the dominant speaker
-    const captionsToRender = captions?.filter((captions) => captions.resultType === 'Final');
-    const firstPartialCaptions = captions
-      ?.filter((captions) => captions.resultType === 'Partial')
-      .sort(captionsComparator)[0];
-
-    firstPartialCaptions && captionsToRender?.push(firstPartialCaptions);
-
-    const captionsInfo = captionsToRender?.map((c) => {
+export const captionsBannerSelector: CaptionsBannerSelector = reselect.createSelector(
+  [
+    getCaptions,
+    /* @conditional-compile-remove(rtt) */
+    getRealTimeText,
+    getCaptionsStatus,
+    /* @conditional-compile-remove(rtt) */
+    getRealTimeTextStatus,
+    getStartCaptionsInProgress,
+    getRemoteParticipants,
+    getDisplayName,
+    getIdentifier
+  ],
+  (
+    captions,
+    /* @conditional-compile-remove(rtt) */
+    realTimeTexts,
+    isCaptionsFeatureActive,
+    /* @conditional-compile-remove(rtt) */
+    isRealTimeTextActive,
+    startCaptionsInProgress,
+    remoteParticipants,
+    displayName,
+    identifier
+  ) => {
+    const captionsInfo = captions?.map((c, index) => {
       const userId = getCaptionsSpeakerIdentifier(c);
+      let finalDisplayName;
+      if (userId === identifier) {
+        finalDisplayName = displayName;
+      } else if (remoteParticipants) {
+        const participant = remoteParticipants[userId];
+        if (participant) {
+          finalDisplayName = participant.displayName;
+        }
+      }
+
       return {
-        id: c.timestamp.getTime() + userId + c.speaker.displayName,
-        displayName: c.speaker.displayName ?? 'Unnamed Participant',
-        captionText: c.captionText ?? '',
-        userId
+        id: (finalDisplayName ?? 'Unnamed Participant') + index,
+        displayName: finalDisplayName ?? 'Unnamed Participant',
+        captionText: c.captionText,
+        userId,
+        createdTimeStamp: c.timestamp
       };
     });
+    /* @conditional-compile-remove(rtt) */
+    const completedRealTimeTexts = realTimeTexts?.completedMessages
+      ?.filter((rtt) => rtt.message !== '')
+      .map((rtt) => {
+        const userId = getRealTimeTextSpeakerIdentifier(rtt);
+        return {
+          id: rtt.sequenceId,
+          displayName: getRealTimeTextDisplayName(rtt, identifier, remoteParticipants, displayName, userId),
+          message: rtt.message,
+          userId,
+          isTyping: rtt.resultType === 'Partial',
+          isMe: rtt.isMe,
+          finalizedTimeStamp: rtt.updatedTimestamp
+        };
+      });
+    /* @conditional-compile-remove(rtt) */
+    const inProgressRealTimeTexts = realTimeTexts?.currentInProgress
+      ?.filter((rtt) => rtt.message !== '')
+      .map((rtt) => {
+        const userId = getRealTimeTextSpeakerIdentifier(rtt);
+        return {
+          id: rtt.sequenceId,
+          displayName: getRealTimeTextDisplayName(rtt, identifier, remoteParticipants, displayName, userId),
+          message: rtt.message,
+          userId,
+          isTyping: rtt.resultType === 'Partial',
+          isMe: rtt.isMe,
+          finalizedTimeStamp: rtt.updatedTimestamp
+        };
+      });
+    /* @conditional-compile-remove(rtt) */
+    const myInProgress =
+      realTimeTexts?.myInProgress && realTimeTexts.myInProgress.message !== ''
+        ? {
+            id: realTimeTexts.myInProgress.sequenceId,
+            displayName: displayName,
+            message: realTimeTexts.myInProgress.message,
+            userId: identifier,
+            isTyping: realTimeTexts.myInProgress.resultType === 'Partial',
+            isMe: true,
+            finalizedTimeStamp: realTimeTexts.myInProgress.updatedTimestamp
+          }
+        : undefined;
+
+    /* @conditional-compile-remove(rtt) */
+    // find the last final local real time text caption if myInProgress is not available
+    let latestLocalRealTimeText;
+    /* @conditional-compile-remove(rtt) */
+    if (!myInProgress) {
+      latestLocalRealTimeText =
+        realTimeTexts &&
+        realTimeTexts.completedMessages &&
+        realTimeTexts.completedMessages
+          .slice()
+          .reverse()
+          .find((rtt) => rtt.isMe);
+    }
+
     return {
       captions: captionsInfo ?? [],
+      /* @conditional-compile-remove(rtt) */
+      realTimeTexts: {
+        completedMessages: completedRealTimeTexts as RealTimeTextInformation[],
+        currentInProgress: inProgressRealTimeTexts as RealTimeTextInformation[],
+        myInProgress: myInProgress as RealTimeTextInformation
+      },
       isCaptionsOn: isCaptionsFeatureActive ?? false,
-      startCaptionsInProgress: startCaptionsInProgress ?? false
+      startCaptionsInProgress: startCaptionsInProgress ?? false,
+      /* @conditional-compile-remove(rtt) */
+      isRealTimeTextOn: isRealTimeTextActive ?? false,
+      /* @conditional-compile-remove(rtt) */
+      latestLocalRealTimeText: (myInProgress ?? latestLocalRealTimeText) as RealTimeTextInformation
     };
   }
 );
 
-/* @conditional-compile-remove(close-captions) */
-const captionsComparator = (captionsA: CaptionsInfo, captionsB: CaptionsInfo): number => {
-  return (
-    captionsA.timestamp.getTime() - captionsB.timestamp.getTime() ||
-    getCaptionsSpeakerIdentifier(captionsA).localeCompare(getCaptionsSpeakerIdentifier(captionsB))
-  );
-};
-
-/* @conditional-compile-remove(close-captions) */
 const getCaptionsSpeakerIdentifier = (captions: CaptionsInfo): string => {
   return captions.speaker.identifier ? toFlatCommunicationIdentifier(captions.speaker.identifier) : '';
+};
+/* @conditional-compile-remove(rtt) */
+const getRealTimeTextSpeakerIdentifier = (realTimeText: RealTimeTextInfo): string => {
+  return realTimeText.sender.identifier ? toFlatCommunicationIdentifier(realTimeText.sender.identifier) : '';
+};
+
+/* @conditional-compile-remove(rtt) */
+const getRealTimeTextDisplayName = (
+  realTimeText: RealTimeTextInfo,
+  identifier: string,
+  remoteParticipants:
+    | {
+        [keys: string]: RemoteParticipantState;
+      }
+    | undefined,
+  displayName: string | undefined,
+  userId: string
+): string => {
+  let finalDisplayName;
+  if (userId === identifier) {
+    finalDisplayName = displayName;
+  } else if (remoteParticipants) {
+    const participant = remoteParticipants[userId];
+    if (participant) {
+      finalDisplayName = participant.displayName;
+    }
+  }
+  return finalDisplayName ?? 'Unnamed Participant';
 };

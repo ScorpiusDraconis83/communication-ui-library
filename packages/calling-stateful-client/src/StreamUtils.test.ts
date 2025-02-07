@@ -10,7 +10,6 @@ import {
   RemoteVideoStream as SdkRemoteVideoStream,
   VideoDeviceInfo
 } from '@azure/communication-calling';
-/* @conditional-compile-remove(teams-identity-support) */
 import { CallKind } from '@azure/communication-calling';
 import { CommunicationUserKind } from '@azure/communication-common';
 import { CallState, LocalVideoStreamState, RemoteParticipantState, RemoteVideoStreamState } from './CallClientState';
@@ -66,7 +65,6 @@ interface TestData {
 
 function createMockCall(mockCallId: string): CallState {
   const call: CallState = {
-    /* @conditional-compile-remove(teams-identity-support) */
     kind: 'Call' as CallKind,
     id: mockCallId,
     callerInfo: {} as CallerInfo,
@@ -86,16 +84,17 @@ function createMockCall(mockCallId: string): CallState {
     remoteParticipants: {},
     remoteParticipantsEnded: {},
     recording: { isRecordingActive: false },
-    /* @conditional-compile-remove(raise-hand) */
+    /* @conditional-compile-remove(local-recording-notification) */
+    localRecording: { isLocalRecordingActive: false },
     raiseHand: { raisedHands: [] },
-    /* @conditional-compile-remove(reaction) */
+    /* @conditional-compile-remove(together-mode) */
+    togetherMode: { isActive: false, streams: {}, seatingPositions: {} },
     localParticipantReaction: undefined,
     transcription: { isTranscriptionActive: false },
     screenShareRemoteParticipant: undefined,
     startTime: new Date(),
     endTime: undefined,
     dominantSpeakers: undefined,
-    /* @conditional-compile-remove(close-captions) */
     captionsFeature: {
       captions: [],
       supportedSpokenLanguages: [],
@@ -103,16 +102,21 @@ function createMockCall(mockCallId: string): CallState {
       currentCaptionLanguage: '',
       currentSpokenLanguage: '',
       isCaptionsFeatureActive: false,
-      startCaptionsInProgress: false
+      startCaptionsInProgress: false,
+      captionsKind: 'Captions'
     },
-    /* @conditional-compile-remove(call-transfer) */
+    /* @conditional-compile-remove(rtt) */
+    realTimeTextFeature: {
+      realTimeTexts: {},
+      isRealTimeTextFeatureActive: false
+    },
     transfer: {
       acceptedTransfers: {}
     },
-    /* @conditional-compile-remove(optimal-video-count) */
     optimalVideoCount: {
       maxRemoteVideoStreams: 4
-    }
+    },
+    pptLive: { isActive: false }
   };
   return call;
 }
@@ -133,7 +137,6 @@ function addMockRemoteStreamAndParticipant(
     id: streamId,
     mediaStreamType: 'Video',
     isAvailable: true,
-    /* @conditional-compile-remove(video-stream-is-receiving-flag) */
     isReceiving: true,
     view: undefined
   };
@@ -231,7 +234,7 @@ describe('stream utils', () => {
     expect(internalContext.getLocalRenderInfo(mockCallId, 'Video')?.stream).toBeDefined();
     expect(internalContext.getLocalRenderInfo(mockCallId, 'Video')?.renderer).toBeDefined();
     expect(internalContext.getLocalRenderInfo(mockCallId, 'Video')?.status).toBe('Rendered');
-    expect(context.getState().calls[mockCallId]?.localVideoStreams[0].view).toBeDefined();
+    expect(context.getState().calls[mockCallId]?.localVideoStreams[0]?.view).toBeDefined();
   });
 
   test('cleans up state and stop rendering when disposeView is called on remote stream', async () => {
@@ -460,7 +463,7 @@ describe('stream utils', () => {
 
     const views = context.getState().deviceManager.unparentedViews;
     expect(views.length).toBe(1);
-    expect(views[0].view).toBeDefined();
+    expect(views[0]?.view).toBeDefined();
   });
 
   test('is able to render LocalVideoStream not tied to a call and stop rendering it by reference find', async () => {
@@ -495,7 +498,7 @@ describe('stream utils', () => {
 
     const views = context.getState().deviceManager.unparentedViews;
     expect(views.length).toBe(1);
-    expect(views[0].view).toBeDefined();
+    expect(views[0]?.view).toBeDefined();
   });
 
   test('context state correctly has startVideo error when unparentedView throws an error creating a video stream', async () => {

@@ -5,12 +5,20 @@ import { DiagnosticQuality } from '@azure/communication-calling';
 import { useId } from '@fluentui/react-hooks';
 import { _isInCall } from '@internal/calling-component-bindings';
 import { ActiveErrorMessage, ErrorBar, ParticipantMenuItemsCallback } from '@internal/react-components';
-/* @conditional-compile-remove(gallery-layouts) */
+/* @conditional-compile-remove(breakout-rooms) */
+import { CustomAvatarOptions, VideoTile } from '@internal/react-components';
+
+import { ActiveNotification } from '@internal/react-components';
 import { VideoGalleryLayout } from '@internal/react-components';
-import React from 'react';
+import React, { useMemo } from 'react';
+/* @conditional-compile-remove(breakout-rooms) */
+import { useCallback } from 'react';
+import { useState } from 'react';
 import { AvatarPersonaDataCallback } from '../../common/AvatarPersona';
+/* @conditional-compile-remove(breakout-rooms) */
+import { AvatarPersona } from '../../common/AvatarPersona';
 import { useLocale } from '../../localization';
-import { CallCompositeOptions } from '../CallComposite';
+import { CallCompositeOptions, DtmfDialPadOptions } from '../CallComposite';
 import { CallArrangement } from '../components/CallArrangement';
 import { MediaGallery } from '../components/MediaGallery';
 import { NetworkReconnectTile } from '../components/NetworkReconnectTile';
@@ -20,13 +28,21 @@ import { useSelector } from '../hooks/useSelector';
 import { callStatusSelector } from '../selectors/callStatusSelector';
 import { complianceBannerSelector } from '../selectors/complianceBannerSelector';
 import { mediaGallerySelector } from '../selectors/mediaGallerySelector';
+import { getRemoteParticipantsConnectedSelector } from '../selectors/mediaGallerySelector';
 import { mutedNotificationSelector } from '../selectors/mutedNotificationSelector';
 import { networkReconnectTileSelector } from '../selectors/networkReconnectTileSelector';
 import { reduceCallControlsForMobile } from '../utils';
 import { MobileChatSidePaneTabHeaderProps } from '../../common/TabHeader';
 import { SidePaneRenderer } from '../components/SidePane/SidePaneProvider';
-/* @conditional-compile-remove(capabilities) */
+
 import { CapabilitiesChangeNotificationBarProps } from '../components/CapabilitiesChangedNotificationBar';
+import { DtmfDialpadPage } from './DtmfDialpadPage';
+import { showDtmfDialer } from '../utils/MediaGalleryUtils';
+import { getTargetCallees } from '../selectors/baseSelectors';
+import { Prompt, PromptProps } from '../components/Prompt';
+import { toFlatCommunicationIdentifier } from '@internal/acs-ui-common';
+/* @conditional-compile-remove(breakout-rooms) */
+import { mergeStyles, Stack } from '@fluentui/react';
 
 /**
  * @private
@@ -40,19 +56,20 @@ export interface CallPageProps {
   updateSidePaneRenderer: (renderer: SidePaneRenderer | undefined) => void;
   mobileChatTabHeader?: MobileChatSidePaneTabHeaderProps;
   options?: CallCompositeOptions;
-  latestErrors: ActiveErrorMessage[];
-  onDismissError: (error: ActiveErrorMessage) => void;
-  /* @conditional-compile-remove(gallery-layouts) */
+  latestErrors: ActiveErrorMessage[] | ActiveNotification[];
+  latestNotifications: ActiveNotification[];
+  onDismissError: (error: ActiveErrorMessage | ActiveNotification) => void;
+  onDismissNotification: (notification: ActiveNotification) => void;
   galleryLayout: VideoGalleryLayout;
-  /* @conditional-compile-remove(capabilities) */
   capabilitiesChangedNotificationBarProps?: CapabilitiesChangeNotificationBarProps;
-  /* @conditional-compile-remove(gallery-layouts) */
   onUserSetGalleryLayoutChange?: (layout: VideoGalleryLayout) => void;
-  /* @conditional-compile-remove(gallery-layouts) */
   userSetOverflowGalleryPosition?: 'Responsive' | 'horizontalTop';
-  /* @conditional-compile-remove(gallery-layouts) */
   onSetUserSetOverflowGalleryPosition?: (position: 'Responsive' | 'horizontalTop') => void;
   onCloseChatPane?: () => void;
+  pinnedParticipants?: string[];
+  setPinnedParticipants?: (pinnedParticipants: string[]) => void;
+  compositeAudioContext?: AudioContext;
+  disableAutoShowDtmfDialer?: boolean | DtmfDialPadOptions;
 }
 
 /**
@@ -65,15 +82,17 @@ export const CallPage = (props: CallPageProps): JSX.Element => {
     onFetchParticipantMenuItems,
     options,
     mobileView,
-    /* @conditional-compile-remove(gallery-layouts) */
     galleryLayout = 'floatingLocalVideo',
-    /* @conditional-compile-remove(gallery-layouts) */
     onUserSetGalleryLayoutChange,
-    /* @conditional-compile-remove(gallery-layouts) */
     userSetOverflowGalleryPosition = 'Responsive',
-    /* @conditional-compile-remove(gallery-layouts) */
     onSetUserSetOverflowGalleryPosition,
-    onCloseChatPane
+    onCloseChatPane,
+    pinnedParticipants = [],
+    setPinnedParticipants,
+    compositeAudioContext,
+    disableAutoShowDtmfDialer = { dialerBehavior: 'autoShow' },
+    latestNotifications,
+    onDismissNotification
   } = props;
 
   // To use useProps to get these states, we need to create another file wrapping Call,
@@ -85,70 +104,161 @@ export const CallPage = (props: CallPageProps): JSX.Element => {
   const errorBarProps = usePropsFor(ErrorBar);
   const mutedNotificationProps = useSelector(mutedNotificationSelector);
   const networkReconnectTileProps = useSelector(networkReconnectTileSelector);
+  const remoteParticipantsConnected = useSelector(getRemoteParticipantsConnectedSelector);
+  const callees = useSelector(getTargetCallees);
+  const renderDtmfDialerFromStart = showDtmfDialer(callees, remoteParticipantsConnected, disableAutoShowDtmfDialer);
+  const [dtmfDialerPresent, setDtmfDialerPresent] = useState<boolean>(renderDtmfDialerFromStart);
 
   const strings = useLocale().strings.call;
+
+  const pinnedParticipantsChecked = useMemo(
+    () =>
+      pinnedParticipants.filter((pinnedParticipant) =>
+        remoteParticipantsConnected.find(
+          (remoteParticipant) => toFlatCommunicationIdentifier(remoteParticipant.identifier) === pinnedParticipant
+        )
+      ),
+    [pinnedParticipants, remoteParticipantsConnected]
+  );
 
   // Reduce the controls shown when mobile view is enabled.
   const callControlOptions = mobileView ? reduceCallControlsForMobile(options?.callControls) : options?.callControls;
 
   const drawerMenuHostId = useId('drawerMenuHost');
+  const [isPromptOpen, setIsPromptOpen] = useState<boolean>(false);
+  const [promptProps, setPromptProps] = useState<PromptProps>();
+
+  /* @conditional-compile-remove(breakout-rooms) */
+  const page = useSelector((state) => state.page);
+  /* @conditional-compile-remove(breakout-rooms) */
+  const userId = useSelector((state) => state.userId);
+  /* @conditional-compile-remove(breakout-rooms) */
+  const displayName = useSelector((state) => state.displayName);
+
+  /* @conditional-compile-remove(breakout-rooms) */
+  const onRenderAvatar = useCallback(
+    (userId?: string, options?: CustomAvatarOptions) => {
+      return (
+        <Stack className={mergeStyles({ position: 'absolute', height: '100%', width: '100%' })}>
+          <Stack styles={{ root: { margin: 'auto', maxHeight: '100%' } }}>
+            {options?.coinSize && (
+              <AvatarPersona userId={userId} {...options} dataProvider={props.onFetchAvatarPersonaData} />
+            )}
+          </Stack>
+        </Stack>
+      );
+    },
+    [props.onFetchAvatarPersonaData]
+  );
+
+  let galleryContentWhenNotInCall = <></>;
+  /* @conditional-compile-remove(breakout-rooms) */
+  if (!_isInCall(callStatus) && page === 'returningFromBreakoutRoom') {
+    galleryContentWhenNotInCall = (
+      <VideoTile
+        userId={toFlatCommunicationIdentifier(userId)}
+        displayName={displayName}
+        initialsName={displayName}
+        onRenderPlaceholder={onRenderAvatar}
+      />
+    );
+  }
+
+  const onRenderGalleryContentTrampoline = (): JSX.Element => {
+    if (dtmfDialerPresent) {
+      return (
+        <DtmfDialpadPage
+          mobileView={props.mobileView}
+          modalLayerHostId={props.modalLayerHostId}
+          options={props.options}
+          updateSidePaneRenderer={props.updateSidePaneRenderer}
+          mobileChatTabHeader={props.mobileChatTabHeader}
+          latestErrors={props.latestErrors as ActiveErrorMessage[]}
+          onDismissError={props.onDismissError}
+          capabilitiesChangedNotificationBarProps={props.capabilitiesChangedNotificationBarProps}
+          onSetDialpadPage={() => setDtmfDialerPresent(!dtmfDialerPresent)}
+          dtmfDialerPresent={dtmfDialerPresent}
+          compositeAudioContext={compositeAudioContext}
+        />
+      );
+    } else {
+      return (
+        <MediaGallery
+          isMobile={mobileView}
+          {...mediaGalleryProps}
+          {...mediaGalleryHandlers}
+          onFetchAvatarPersonaData={onFetchAvatarPersonaData}
+          remoteVideoTileMenuOptions={options?.remoteVideoTileMenuOptions}
+          drawerMenuHostId={drawerMenuHostId}
+          localVideoTileOptions={options?.localVideoTile}
+          userSetOverflowGalleryPosition={userSetOverflowGalleryPosition}
+          userSetGalleryLayout={galleryLayout}
+          pinnedParticipants={pinnedParticipantsChecked}
+          setPinnedParticipants={setPinnedParticipants}
+          setIsPromptOpen={setIsPromptOpen}
+          setPromptProps={setPromptProps}
+          hideSpotlightButtons={options?.spotlight?.hideSpotlightButtons}
+          videoTilesOptions={options?.videoTilesOptions}
+          captionsOptions={options?.captionsBanner}
+        />
+      );
+    }
+  };
 
   return (
-    <CallArrangement
-      id={drawerMenuHostId}
-      complianceBannerProps={{ ...complianceBannerProps, strings }}
-      errorBarProps={options?.errorBar !== false && errorBarProps}
-      mutedNotificationProps={mutedNotificationProps}
-      callControlProps={{
-        callInvitationURL: callInvitationURL,
-        onFetchParticipantMenuItems: onFetchParticipantMenuItems,
-        options: callControlOptions,
-        increaseFlyoutItemSize: mobileView
-      }}
-      /* @conditional-compile-remove(one-to-n-calling) */ /* @conditional-compile-remove(close-captions) */
-      onFetchAvatarPersonaData={onFetchAvatarPersonaData}
-      mobileView={mobileView}
-      modalLayerHostId={props.modalLayerHostId}
-      onRenderGalleryContent={() =>
-        _isInCall(callStatus) ? (
-          isNetworkHealthy(networkReconnectTileProps.networkReconnectValue) ? (
-            <MediaGallery
-              isMobile={mobileView}
-              {...mediaGalleryProps}
-              {...mediaGalleryHandlers}
-              onFetchAvatarPersonaData={onFetchAvatarPersonaData}
-              /* @conditional-compile-remove(pinned-participants) */
-              remoteVideoTileMenuOptions={options?.remoteVideoTileMenuOptions}
-              drawerMenuHostId={drawerMenuHostId}
-              /* @conditional-compile-remove(click-to-call) */
-              localVideoTileOptions={options?.localVideoTile}
-              /* @conditional-compile-remove(gallery-layouts) */
-              userSetOverflowGalleryPosition={userSetOverflowGalleryPosition}
-              /* @conditional-compile-remove(gallery-layouts) */
-              userSetGalleryLayout={galleryLayout}
-            />
+    <>
+      <CallArrangement
+        id={drawerMenuHostId}
+        complianceBannerProps={{ ...complianceBannerProps, strings }}
+        errorBarProps={options?.errorBar !== false && errorBarProps}
+        showErrorNotifications={options?.errorBar ?? true}
+        mutedNotificationProps={mutedNotificationProps}
+        callControlProps={{
+          callInvitationURL: callInvitationURL,
+          onFetchParticipantMenuItems: onFetchParticipantMenuItems,
+          options: callControlOptions,
+          increaseFlyoutItemSize: mobileView
+        }}
+        onFetchAvatarPersonaData={onFetchAvatarPersonaData}
+        mobileView={mobileView}
+        modalLayerHostId={props.modalLayerHostId}
+        onRenderGalleryContent={() =>
+          _isInCall(callStatus) ? (
+            isNetworkHealthy(networkReconnectTileProps.networkReconnectValue) ? (
+              onRenderGalleryContentTrampoline()
+            ) : (
+              <NetworkReconnectTile {...networkReconnectTileProps} isMobile={mobileView} />
+            )
           ) : (
-            <NetworkReconnectTile {...networkReconnectTileProps} />
+            galleryContentWhenNotInCall
           )
-        ) : (
-          <></>
-        )
-      }
-      updateSidePaneRenderer={props.updateSidePaneRenderer}
-      mobileChatTabHeader={props.mobileChatTabHeader}
-      onCloseChatPane={onCloseChatPane}
-      dataUiId={'call-page'}
-      latestErrors={props.latestErrors}
-      onDismissError={props.onDismissError}
-      /* @conditional-compile-remove(gallery-layouts) */
-      onUserSetOverflowGalleryPositionChange={onSetUserSetOverflowGalleryPosition}
-      /* @conditional-compile-remove(gallery-layouts) */
-      onUserSetGalleryLayoutChange={onUserSetGalleryLayoutChange}
-      /* @conditional-compile-remove(gallery-layouts) */
-      userSetGalleryLayout={galleryLayout}
-      /* @conditional-compile-remove(capabilities) */
-      capabilitiesChangedNotificationBarProps={props.capabilitiesChangedNotificationBarProps}
-    />
+        }
+        updateSidePaneRenderer={props.updateSidePaneRenderer}
+        mobileChatTabHeader={props.mobileChatTabHeader}
+        onCloseChatPane={onCloseChatPane}
+        dataUiId={'call-page'}
+        latestErrors={props.latestErrors}
+        latestNotifications={latestNotifications}
+        onDismissError={props.onDismissError}
+        onDismissNotification={onDismissNotification}
+        onUserSetOverflowGalleryPositionChange={onSetUserSetOverflowGalleryPosition}
+        onUserSetGalleryLayoutChange={onUserSetGalleryLayoutChange}
+        userSetGalleryLayout={galleryLayout}
+        capabilitiesChangedNotificationBarProps={props.capabilitiesChangedNotificationBarProps}
+        onSetDialpadPage={() => setDtmfDialerPresent(!dtmfDialerPresent)}
+        dtmfDialerPresent={dtmfDialerPresent}
+        setIsPromptOpen={setIsPromptOpen}
+        setPromptProps={setPromptProps}
+        hideSpotlightButtons={options?.spotlight?.hideSpotlightButtons}
+        pinnedParticipants={pinnedParticipantsChecked}
+        setPinnedParticipants={setPinnedParticipants}
+        /* @conditional-compile-remove(call-readiness) */
+        doNotShowCameraAccessNotifications={props.options?.deviceChecks?.camera === 'doNotPrompt'}
+        captionsOptions={options?.captionsBanner}
+        dtmfDialerOptions={disableAutoShowDtmfDialer}
+      />
+      {<Prompt isOpen={isPromptOpen} onDismiss={() => setIsPromptOpen(false)} {...promptProps} />}
+    </>
   );
 };
 

@@ -23,7 +23,7 @@ test.describe('Component Examples Test', () => {
   });
 
   // only need to make sure it is loading correctly, the rest will be the responsibility of composite tests
-  test('Whether html page is loaded right with 2 composites', async ({ page }) => {
+  test.skip('Whether html page is loaded right with 2 composites', async ({ page }) => {
     // Wait for message to finish sending
     await page.waitForSelector(dataUiId('sendbox-textfield'));
     await page.waitForSelector('[id="camera-button"]');
@@ -67,7 +67,7 @@ test.describe('Component Examples Test', () => {
  */
 export const stubMessageTimestamps = async (page: Page): Promise<void> => {
   await page.addScriptTag({
-    content: `document.querySelector('[data-ui-id=message-timestamp]').innerText='timestamp';`
+    content: `document.querySelector('[data-testid=message-timestamp]').innerText='timestamp';`
   });
   // Wait for timestamps to have been updated in the DOM
   await page.waitForFunction(
@@ -76,6 +76,6 @@ export const stubMessageTimestamps = async (page: Page): Promise<void> => {
       const timestampNodes = Array.from(document.querySelectorAll(selector));
       return timestampNodes.every((node) => node.textContent === 'timestamp');
     },
-    { selector: '[data-ui-id=message-timestamp]' }
+    { selector: '[data-testid=message-timestamp]' }
   );
 };

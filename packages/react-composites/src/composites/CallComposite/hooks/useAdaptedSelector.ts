@@ -8,9 +8,14 @@ import { useState, useEffect, useRef, useMemo } from 'react';
 import memoizeOne from 'memoize-one';
 import { useAdapter } from '../adapter/CallAdapterProvider';
 import { CallAdapterState } from '../adapter/CallAdapter';
-import { CallErrors, CallState, CallClientState, DeviceManagerState } from '@internal/calling-stateful-client';
+import {
+  CallErrors,
+  CallState,
+  CallClientState,
+  DeviceManagerState,
+  CallNotifications
+} from '@internal/calling-stateful-client';
 import { CommunicationIdentifierKind } from '@azure/communication-common';
-/* @conditional-compile-remove(unsupported-browser) */
 import { EnvironmentInfo } from '@azure/communication-calling';
 /**
  * @private
@@ -82,9 +87,10 @@ const memoizeState = memoizeOne(
     deviceManager: DeviceManagerState,
     calls: { [key: string]: CallState },
     latestErrors: CallErrors,
+    latestNotifications?: CallNotifications,
     displayName?: string,
     alternateCallerId?: string,
-    environmentInfo?: undefined | /* @conditional-compile-remove(unsupported-browser) */ EnvironmentInfo
+    environmentInfo?: EnvironmentInfo
   ): CallClientState => ({
     userId,
     incomingCalls: {},
@@ -94,9 +100,8 @@ const memoizeState = memoizeOne(
     callAgent: { displayName },
     calls,
     latestErrors,
-    /* @conditional-compile-remove(PSTN-calls) */
+    latestNotifications: latestNotifications ?? ({} as CallNotifications),
     alternateCallerId,
-    /* @conditional-compile-remove(unsupported-browser) */
     environmentInfo
   })
 );
@@ -122,10 +127,10 @@ const adaptCompositeState = (compositeState: CallAdapterState): CallClientState 
     // just displaying them in some UI surface) will continue to work for these operations. Handling of
     // specific operations (e.g., acting on errors related to permission issues) will ignore these operations.
     compositeState.latestErrors as CallErrors,
+    undefined ||
+      /* @conditional-compile-remove(breakout-rooms) */ (compositeState.latestNotifications as CallNotifications),
     compositeState.displayName,
-    /* @conditional-compile-remove(PSTN-calls) */
     compositeState.alternateCallerId,
-    /* @conditional-compile-remove(unsupported-browser) */
     compositeState.environmentInfo
   );
 };

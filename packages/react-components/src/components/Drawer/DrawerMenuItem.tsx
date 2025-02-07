@@ -54,6 +54,14 @@ export interface _DrawerMenuItemProps {
    * Property to set the focus since this is the first item in the menu
    */
   shouldFocusOnMount?: boolean;
+  /**
+   * Custom JSX item injection for custom mobile view button on drawers
+   */
+  onRendererContent?: () => JSX.Element;
+  /**
+   * Aria label for the menu item
+   */
+  ariaLabel?: string;
 }
 
 /**
@@ -88,6 +96,7 @@ export const DrawerMenuItem = (props: _DrawerMenuItemProps): JSX.Element => {
         onClick={props.disabled ? undefined : onClick}
         tokens={menuItemChildrenGap}
         id={props.id}
+        aria-label={props.ariaLabel}
       >
         {props.iconProps && (
           <Stack.Item

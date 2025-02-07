@@ -12,8 +12,6 @@ import { ChatAdapterThreadManagement, ChatAdapterUiState } from '../../ChatCompo
 import { CallWithChatControlOptions } from '../CallWithChatComposite';
 import { CallWithChatAdapterUiState, CallWithChatClientState } from '../state/CallWithChatAdapterState';
 import { CallWithChatAdapterManagement } from './CallWithChatAdapter';
-/* @conditional-compile-remove(file-sharing) */
-import { FileUploadAdapter } from '../../ChatComposite';
 
 /// IMPORTANT
 ///
@@ -27,14 +25,9 @@ import { FileUploadAdapter } from '../../ChatComposite';
 
 /// CallWithChatAdapterManagement
 
-type CallWithChatAdapterManagementInternal = Omit<
-  CallAdapterCallManagement,
-  'removeParticipant' | 'onReactionClicked'
-> &
+type CallWithChatAdapterManagementInternal = Omit<CallAdapterCallManagement, 'removeParticipant' | 'onReactionClick'> &
   CallAdapterDeviceManagement &
-  Omit<ChatAdapterThreadManagement, 'removeParticipant' | 'setTopic'> &
-  /* @conditional-compile-remove(file-sharing) */
-  FileUploadAdapter;
+  Omit<ChatAdapterThreadManagement, 'removeParticipant' | 'setTopic'>;
 
 const CallWithChatAdapterManagementTypeAssertion = (
   value: CallWithChatAdapterManagement
@@ -51,11 +44,7 @@ CallWithChatAdapterManagementRequiredTypeAssertion;
 
 type CallWithChatControlOptionsInternal = Omit<
   CallControlOptions,
-  | 'endCallButton'
-  | 'devicesButton'
-  | /* @conditional-compile-remove(control-bar-button-injection) */ 'onFetchCustomButtonProps'
-  | 'participantsButton'
-  | 'legacyControlBarExperience'
+  'endCallButton' | 'devicesButton' | 'onFetchCustomButtonProps' | 'participantsButton' | 'legacyControlBarExperience'
 >;
 
 const CallWithChatControlOptionsTypeAssertion = (
@@ -91,16 +80,18 @@ type CallWithChatClientStateInternal = Omit<
   | 'displayName'
   | 'endedCall'
   | 'latestErrors'
+  | /* @conditional-compile-remove(breakout-rooms) */ 'latestNotifications'
   | 'userId'
-  | /* @conditional-compile-remove(PSTN-calls) */ 'alternateCallerId'
+  | 'alternateCallerId'
   | /* @conditional-compile-remove(unsupported-browser) */ 'features'
-  | /* @conditional-compile-remove(video-background-effects) */ 'videoBackgroundImages'
-  | /* @conditional-compile-remove(video-background-effects) */ 'selectedVideoBackgroundEffect'
-  | /* @conditional-compile-remove(call-transfer) */ 'acceptedTransferCallState'
+  | 'videoBackgroundImages'
+  | 'selectedVideoBackgroundEffect'
+  | 'acceptedTransferCallState'
   | 'cameraStatus'
-  | /* @conditional-compile-remove(calling-sounds) */ 'sounds'
-  | /* @conditional-compile-remove(rooms) */ 'isRoomsCall'
-  | /* @conditional-compile-remove(calling-sounds) */ 'targetCallees'
+  | 'sounds'
+  | 'isRoomsCall'
+  | 'targetCallees'
+  | 'mediaAccess'
 >;
 
 const CallWithChatClientStateTypeAssertion = (value: CallWithChatClientState): CallWithChatClientStateInternal => value;

@@ -6,6 +6,8 @@ import { makeStyles, shorthands, tokens } from '@fluentui/react-components';
 import { CSSProperties } from 'react';
 import { MESSAGE_STATUS_INDICATOR_SIZE_REM } from './MessageStatusIndicator.styles';
 import { ComponentSlotStyle } from '../../types';
+import { _ATTACHMENT_CARD_MARGIN_IN_PX, _ATTACHMENT_CARD_WIDTH_IN_REM } from './AttachmentCard.styles';
+import { BROKEN_IMAGE_SVG_DATA } from './Common.style';
 
 // Minimum chat bubble width. This matches the minimum chat bubble width from FluentUI
 // that can contain a message and a timestamp.
@@ -25,6 +27,11 @@ const CHAT_MESSAGE_ZINDEX = 1;
 const AVATAR_ZINDEX = 2;
 // new message button should be on top of chat message
 const NEW_MESSAGE_BUTTON_ZINDEX = 2;
+
+/**
+ * @private
+ */
+export const chatMyMessageActionMenuClassName = 'ChatMyMessage__actions';
 
 /**
  * @private
@@ -61,6 +68,8 @@ export const noMessageStatusStyle = mergeStyles({
  */
 export const useChatStyles = makeStyles({
   root: {
+    // chat components sets max width value to 1056px, override it to 100%
+    maxWidth: '100%',
     paddingTop: '0.8rem',
     paddingBottom: '0.5rem',
     paddingRight: '0.6rem',
@@ -87,11 +96,7 @@ export const useChatStyles = makeStyles({
  * @private
  */
 export const useChatMessageRenderStyles = makeStyles({
-  rootCommon: {
-    '&:focus-visible': {
-      ...shorthands.outline('0')
-    }
-  },
+  rootCommon: {},
   rootMessage: {
     ...shorthands.padding('0'),
     ...shorthands.margin('0'),
@@ -118,7 +123,10 @@ export const useChatMessageRenderStyles = makeStyles({
     marginBottom: '0',
     backgroundColor: 'transparent',
     maxWidth: '100%',
-    minWidth: `${CHAT_MESSAGE_CONTAINER_MIN_WIDTH_REM}rem`
+    minWidth: `${CHAT_MESSAGE_CONTAINER_MIN_WIDTH_REM}rem`,
+    '&:focus-visible': {
+      outlineStyle: 'auto'
+    }
   },
   bodyMyMessage: {
     width: '100%',
@@ -127,6 +135,10 @@ export const useChatMessageRenderStyles = makeStyles({
   bodyWithoutAvatar: {
     marginLeft: `${AVATAR_MARGIN_LEFT}rem`,
     marginTop: '0'
+  },
+  bodyHiddenAvatar: {
+    marginLeft: 0,
+    marginTop: 0
   },
   bodyWithAvatar: {
     marginLeft: `0`,
@@ -145,18 +157,13 @@ export const useChatMessageRenderStyles = makeStyles({
  */
 export const useChatMyMessageStyles = makeStyles({
   root: {
-    gridTemplateColumns: 'auto auto',
+    gridTemplateColumns: 'auto',
     gridTemplateAreas: `
-        ". actions"
-        "body body"
+        "body"
       `,
     gridGap: '0',
-    columnGap: '0',
     paddingTop: '0',
-    marginLeft: '0',
-    '&:focus-visible': {
-      ...shorthands.outline('0')
-    }
+    marginLeft: '0'
   },
   body: {
     paddingBottom: '10px',
@@ -167,15 +174,31 @@ export const useChatMyMessageStyles = makeStyles({
     // This makes message bubble show border in high contrast mode making each message distinguishable
     ...shorthands.border('1px', 'solid', 'transparent'),
 
-    '&:hover ~ .fui-ChatMyMessage__actions': {
+    '&:hover .ChatMyMessage__actions': {
       visibility: 'visible'
     },
-    '&:focus ~ .fui-ChatMyMessage__actions': {
+    '&:focus .ChatMyMessage__actions': {
       visibility: 'visible'
     },
     '& msft-mention': {
       color: tokens.colorStatusWarningBackground3,
       fontWeight: 600
+    },
+    '&:focus-visible': {
+      outlineStyle: 'auto'
+    },
+    '& img': {
+      maxWidth: '100%',
+      height: 'auto'
+    }
+  },
+  /* @conditional-compile-remove(rich-text-editor-image-upload) */
+  bodyWithPlaceholderImage: {
+    // Adding width and height to the placeholder image only for myMessages
+    // because inline images sent from ACS doesn't have width and height in the image tag
+    '& img[src=""]': {
+      width: '12rem',
+      height: '12rem'
     }
   },
   bodyAttached: {
@@ -184,9 +207,8 @@ export const useChatMyMessageStyles = makeStyles({
   menu: {
     boxShadow: tokens.shadow4,
     backgroundColor: tokens.colorNeutralBackground1,
-    marginRight: '1px',
     position: 'absolute',
-    top: '-2px',
+    top: '-19px',
     right: '0',
     ...shorthands.borderRadius(tokens.borderRadiusMedium),
     zIndex: 1,
@@ -198,14 +220,21 @@ export const useChatMyMessageStyles = makeStyles({
       visibility: 'visible'
     }
   },
-  menuAttached: {
-    top: '-18px'
-  },
   menuHidden: {
     visibility: 'hidden'
   },
   menuVisible: {
     visibility: 'visible'
+  },
+  multipleAttachmentsInViewing: {
+    width: '100%',
+    maxWidth: `${(_ATTACHMENT_CARD_WIDTH_IN_REM + _ATTACHMENT_CARD_MARGIN_IN_PX) * 2}rem`
+  },
+  multipleAttachmentsInEditing: {
+    // when in editing state, the chat message width should not be
+    // limited by content length but occupying the full width instead
+    width: '100%',
+    float: 'right'
   }
 });
 
@@ -231,10 +260,7 @@ export const chatMessageDateStyle: CSSProperties = {
  */
 export const useChatMessageStyles = makeStyles({
   root: {
-    paddingTop: '0',
-    '&:focus-visible': {
-      ...shorthands.outline('0')
-    }
+    paddingTop: '0'
   },
   body: {
     maxWidth: '100%',
@@ -283,41 +309,11 @@ export const useChatMessageStyles = makeStyles({
       ...shorthands.borderColor(tokens.colorNeutralStroke1Selected),
       borderLeftWidth: '4px'
     },
-    '& table': {
-      backgroundColor: tokens.colorBrandBackgroundInverted,
-      ...shorthands.borderColor(tokens.colorNeutralStroke1Selected),
-      borderCollapse: 'collapse',
-      tableLayout: 'auto',
-      width: '100%',
-
-      '& tr': {
-        ...shorthands.border('1px', 'solid', `${tokens.colorNeutralStroke1Selected}`),
-
-        '& td': {
-          ...shorthands.border('1px', 'solid', `${tokens.colorNeutralStroke1Selected}`),
-          wordBreak: 'normal',
-          paddingTop: '0px',
-          paddingRight: '5px'
-        }
-      }
-    }
-  },
-  bodyWithPlaceholderImage: {
-    '& img[src=""]': {
-      display: 'block',
-      position: 'relative',
-      marginBottom: '5px'
+    '& code': {
+      whiteSpace: 'pre-wrap'
     },
-    '& img[src=""]:after': {
-      backgroundColor: tokens.colorNeutralBackground1Selected,
-      content: `url("data:image/gif;base64,R0lGODlhAQABAAAAACw=")`,
-      backgroundSize: 'center',
-      position: 'absolute',
-      width: '100%',
-      height: '100%',
-      top: '0',
-      left: '0',
-      display: 'block'
+    '&:focus-visible': {
+      outlineStyle: 'auto'
     }
   },
   bodyWithoutAvatar: {
@@ -331,6 +327,9 @@ export const useChatMessageStyles = makeStyles({
   },
   avatarOverlap: {
     marginLeft: `${-AVATAR_MARGIN_LEFT - MESSAGE_AVATAR_OVERLAP_REM}rem`
+  },
+  multipleAttachments: {
+    width: `${(_ATTACHMENT_CARD_WIDTH_IN_REM + _ATTACHMENT_CARD_MARGIN_IN_PX) * 2}rem`
   }
 });
 
@@ -338,6 +337,64 @@ export const useChatMessageStyles = makeStyles({
  * @private
  */
 export const useChatMessageCommonStyles = makeStyles({
+  body: {
+    '& table': {
+      backgroundColor: tokens.colorBrandBackgroundInverted,
+      borderCollapse: 'collapse',
+      tableLayout: 'auto',
+      width: '100%',
+
+      '& tr': {
+        ...shorthands.border('1px', 'solid', `${tokens.colorNeutralStrokeAccessible}`),
+
+        '& td': {
+          ...shorthands.border('1px', 'solid', `${tokens.colorNeutralStrokeAccessible}`),
+          wordBreak: 'normal',
+          paddingTop: '0px',
+          paddingRight: '5px'
+        }
+      }
+    }
+  },
+  bodyWithPlaceholderImage: {
+    '& img[src=""]': {
+      backgroundColor: tokens.colorNeutralBackground1Selected,
+      // this ensures safari won't have default rendering when image source
+      // becomes invalid such as empty string in this case
+      fontSize: '0',
+      position: 'relative',
+      clipPath: 'inset(0.3px)',
+      display: 'flex'
+    },
+    '& img[src=""]:after': {
+      backgroundColor: tokens.colorNeutralBackground1Selected,
+      content: `url("data:image/gif;base64,R0lGODlhAQABAAAAACw=")`,
+      backgroundSize: 'center',
+      position: 'absolute',
+      width: '100%',
+      height: '100%',
+      top: '0',
+      left: '0',
+      display: 'block'
+    },
+    '& .broken-image-wrapper': {
+      width: '12rem',
+      height: '12rem',
+      marginTop: '0.75rem',
+      display: 'flex',
+      justifyContent: 'center',
+      alignItems: 'center',
+      ...shorthands.outline('1px', 'solid', tokens.colorNeutralForegroundDisabled),
+      backgroundColor: tokens.colorNeutralBackground2
+    },
+    '& .broken-image-wrapper:after': {
+      content: `''`,
+      maskImage: `url("${BROKEN_IMAGE_SVG_DATA}");`,
+      width: '3rem',
+      height: '3rem',
+      backgroundColor: `${tokens.colorNeutralForeground2}`
+    }
+  },
   failed: {
     //TODO: can we reuse a theme color here?
     backgroundColor: 'rgba(168, 0, 0, 0.2)'
@@ -427,4 +484,15 @@ export const loadPreviousMessageButtonStyle = mergeStyles({
  */
 export const DownIconStyle = mergeStyles({
   marginRight: '0.5em'
+});
+
+/** @private */
+export const dataLossIconStyle = mergeStyles({
+  width: '1.25rem',
+  height: '1.25rem'
+});
+
+/** @private */
+export const messageTextContentStyles = mergeStyles({
+  whiteSpace: 'pre-wrap'
 });

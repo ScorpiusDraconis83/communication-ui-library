@@ -21,12 +21,10 @@ export const messageTemplate: ChatMessageWithStatus = {
     communicationUserId: 'UserId'
   },
   senderDisplayName: 'User',
-  type: 'text',
+  type: 'html',
   sequenceId: '',
   version: '',
-  status: 'delivered',
-  /* @conditional-compile-remove(data-loss-prevention) */
-  policyViolation: false
+  status: 'delivered'
 };
 
 /**

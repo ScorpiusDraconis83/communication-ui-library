@@ -25,7 +25,6 @@ export const groupCallLeaveButtonStyle = {
   root: {
     border: '0.125rem',
     borderRadius: 2,
-    height: '2.1875rem',
     width: '6.5625rem'
   },
   flexContainer: {
@@ -103,7 +102,7 @@ export const devicesButtonWithIncreasedTouchTargets: DevicesButtonStyles = {
  */
 export const controlButtonBaseStyle: IButtonStyles = {
   label: {
-    minWidth: '2.25rem'
+    minWidth: '1.25rem'
   }
 };
 

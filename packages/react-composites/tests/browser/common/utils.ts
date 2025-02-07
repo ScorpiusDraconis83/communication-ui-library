@@ -19,8 +19,14 @@ export function perStepLocalTimeout(): number {
   return PER_STEP_TIMEOUT_MS;
 }
 
-/** Selector string to get element by data-ui-id property */
+/**
+ *  Selector string to get element by data-ui-id property
+ * @deprecated Use native Playwright functions to get locators or use `dataTestId` instead.
+ */
 export const dataUiId = (id: string): string => `[data-ui-id="${id}"]`;
+
+/** Selector string to get element by data-testid property */
+export const dataTestId = (id: string): string => `[data-testid="${id}"]`;
 
 /**
  * Wrapper function to take a screenshot if the provided callback fails.
@@ -309,7 +315,7 @@ export const waitForPiPiPToHaveLoaded = async (
  * Stub out timestamps on the page to avoid spurious diffs in snapshot tests.
  */
 export const stubMessageTimestamps = async (page: Page): Promise<void> => {
-  const messageTimestampId: string = dataUiId(IDS.messageTimestamp);
+  const messageTimestampId: string = dataTestId(IDS.messageTimestamp);
   await page.evaluate((messageTimestampId) => {
     Array.from(document.querySelectorAll(messageTimestampId)).forEach((i) => (i.textContent = 'timestamp'));
   }, messageTimestampId);
@@ -365,16 +371,16 @@ export const waitForParticipants = async (page: Page, numParticipants: number): 
       return participantList.children.length === args.numParticipants;
     },
     {
-      participantListSelector: participantListSelector,
-      numParticipants: numParticipants
+      participantListSelector,
+      numParticipants
     }
   );
 };
 
 export const encodeQueryData = (qArgs?: { [key: string]: string }): string => {
   const qs: Array<string> = [];
-  for (const key in qArgs) {
-    qs.push(encodeURIComponent(key) + '=' + encodeURIComponent(qArgs[key]));
+  for (const [key, value] of Object.entries(qArgs || {})) {
+    qs.push(encodeURIComponent(key) + '=' + encodeURIComponent(value));
   }
   return qs.join('&');
 };
@@ -394,7 +400,7 @@ export const buildUrl = (
 
 // Unexported types from @playwright/tests package we need
 type PageFunction<R> = string | ((arg: unknown) => R | Promise<R>);
-type SmartHandle<T> = T extends Node ? ElementHandle<T> : JSHandle<T>;
+type SmartHandle<T> = [T] extends [Node] ? ElementHandle<T> : JSHandle<T>;
 
 /**
  *  Helper function to detect whether a test is for a mobile broswer or not.
@@ -579,7 +585,7 @@ async function maskVideos(page: Page): Promise<void> {
  * type of file being loaded (e.g.- .pdf, .docx, .png, .txt)
  */
 const awaitFileTypeIcon = async (page: Page): Promise<void> => {
-  const fileTypeIconId: string = dataUiId(IDS.fileTypeIcon);
+  const fileTypeIconId: string = dataUiId(IDS.attachmentTypeIcon);
   await waitForFunction(
     page,
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -642,7 +648,7 @@ export const dragToRight = async (page: Page, selector: string): Promise<void> =
   const boundingBox = await handle.boundingBox();
   if (!boundingBox) {
     page.screenshot({ path: `test-results/failure-screenshot-${generateGUID()}.png` });
-    fail(`Bounding box for selector '${selector}' could not be found.`);
+    throw new Error(`Bounding box for selector '${selector}' could not be found.`);
   }
   await screenshotOnFailure(
     page,

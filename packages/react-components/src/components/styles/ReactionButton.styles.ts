@@ -1,12 +1,17 @@
 // Copyright (c) Microsoft Corporation.
 // Licensed under the MIT License.
 
-/* @conditional-compile-remove(reaction) */
-import { keyframes, memoizeFunction } from '@fluentui/react';
-/* @conditional-compile-remove(reaction) */
+import {
+  ITooltipHostStyles,
+  keyframes,
+  memoizeFunction,
+  IStyle,
+  IButtonStyles,
+  Theme,
+  ICalloutContentStyles
+} from '@fluentui/react';
 import React from 'react';
 
-/* @conditional-compile-remove(reaction) */
 /**
  * @private
  */
@@ -21,20 +26,86 @@ export const playFrames = memoizeFunction(() =>
   })
 );
 
-/* @conditional-compile-remove(reaction) */
 /**
  * @param backgroundImage - the uri for the reaction emoji resource
  * @param animationPlayState - the value is either 'running' or 'paused' based on the mouse hover event
  *
  * @private
  */
-export const emojiStyles = (backgroundImage?: string, animationPlayState?: string): React.CSSProperties => {
+export const emojiStyles = (backgroundImage: string, frameCount: number): IStyle => {
+  const imageResourceUrl = `url(${backgroundImage})`;
+  const steps = frameCount ?? 51;
   return {
     display: 'flex',
     flexDirection: 'column',
     height: '100%',
     width: '100%',
-    backgroundImage: backgroundImage,
+    backgroundImage: imageResourceUrl,
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundSize: `2.75rem 133.875rem`,
+    transition: 'opacity 2s',
+    minWidth: '2.75rem',
+    backgroundColor: 'transparent',
+    transform: 'scale(0.6)',
+    ':hover': {
+      transform: 'scale(0.8)',
+      animationName: playFrames(),
+      animationDuration: '8.12s',
+      animationTimingFunction: `steps(${steps})`,
+      animationIterationCount: 'infinite',
+      backgroundColor: 'transparent'
+    },
+    ':active': {
+      backgroundColor: 'transparent'
+    }
+  };
+};
+
+/**
+ *
+ * @private
+ */
+export const reactionToolTipHostStyle = (): ITooltipHostStyles => {
+  return {
+    root: {
+      display: 'flex',
+      flexDirection: 'column',
+      height: '100%',
+      width: '2.75rem'
+    }
+  };
+};
+
+/**
+ *
+ * @private
+ */
+export const mobileViewMenuItemStyle = (): React.CSSProperties => {
+  return {
+    display: 'flex',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    flexDirection: 'row',
+    width: '100%',
+    height: '2.625rem'
+  };
+};
+
+/**
+ * @param backgroundImage - the uri for the reaction emoji resource
+ * @param animationPlayState - the value is either 'running' or 'paused' based on the mouse hover event
+ *
+ * @private
+ */
+export const mobileViewEmojiStyles = (backgroundImage: string, animationPlayState: string): React.CSSProperties => {
+  const imageResourceUrl = `url(${backgroundImage})`;
+  return {
+    display: 'flex',
+    flexDirection: 'column',
+    height: '100%',
+    width: '2.75rem',
+    backgroundImage: imageResourceUrl,
     animationName: playFrames(),
     animationDuration: '8.12s',
     animationTimingFunction: `steps(102)`,
@@ -43,25 +114,56 @@ export const emojiStyles = (backgroundImage?: string, animationPlayState?: strin
     justifyContent: 'center',
     alignItems: 'center',
     backgroundPosition: 'center',
-    backgroundSize: `44px 2142px`,
+    backgroundSize: `2.75rem 133.875rem`,
     transition: 'opacity 2s',
     backgroundColor: 'transparent',
-    transform: `scale(0.6)`
+    transform: `${animationPlayState === 'running' ? 'scale(0.8)' : 'scale(0.6)'}`
   };
 };
-
-/* @conditional-compile-remove(reaction) */
 /**
- *
  * @private
  */
-export const reactionEmojiMenuStyles = (): React.CSSProperties => {
-  return {
+export const reactionButtonStyles = (theme: Theme): IButtonStyles => ({
+  rootChecked: {
+    background: theme.palette.themePrimary,
+    color: theme.palette.white
+  },
+  rootCheckedHovered: {
+    background: theme.palette.themePrimary,
+    color: theme.palette.white
+  },
+  labelChecked: { color: theme.palette.white }
+});
+
+/**
+ * @private
+ */
+export const reactionItemButtonStyles: IButtonStyles = {
+  root: {
+    border: 'none',
+    height: '2.75rem',
+    width: '2.75rem'
+  }
+};
+
+/**
+ * @private
+ */
+export const reactionButtonCalloutStyles: ICalloutContentStyles = {
+  container: {},
+  root: {},
+  beak: {},
+  beakCurtain: {},
+  calloutMain: {
     display: 'flex',
     justifyContent: 'center',
     alignItems: 'center',
     flexDirection: 'row',
-    width: '220px',
-    height: '42px'
-  };
+    width: '13.75rem',
+    height: '2.625rem',
+    // Ensure that when one emoji is hovered, the other emojis are partially faded out
+    ':hover > :not(:hover)': {
+      opacity: '0.5'
+    }
+  }
 };

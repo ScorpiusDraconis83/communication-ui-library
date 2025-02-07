@@ -2,10 +2,16 @@
 // Licensed under the MIT License.
 
 import { deviceManagerDeclaratify } from './DeviceManagerDeclarative';
-import { CallClient, CallClientOptions, CreateViewOptions, DeviceManager } from '@azure/communication-calling';
-/* @conditional-compile-remove(unsupported-browser) */
-import { Features } from '@azure/communication-calling';
+import {
+  CallClient,
+  CallClientOptions,
+  CreateViewOptions,
+  DeviceManager,
+  Features
+} from '@azure/communication-calling';
 import { CallClientState, LocalVideoStreamState, RemoteVideoStreamState } from './CallClientState';
+/* @conditional-compile-remove(together-mode) */
+import { CallFeatureStreamState } from './CallClientState';
 import { CallContext } from './CallContext';
 import { callAgentDeclaratify, DeclarativeCallAgent } from './CallAgentDeclarative';
 import { InternalCallContext } from './InternalCallContext';
@@ -17,11 +23,11 @@ import {
   _TelemetryImplementationHint
 } from '@internal/acs-ui-common';
 import { callingStatefulLogger } from './Logger';
-/* @conditional-compile-remove(teams-identity-support) */
 import { DeclarativeTeamsCallAgent, teamsCallAgentDeclaratify } from './TeamsCallAgentDeclarative';
-/* @conditional-compile-remove(teams-identity-support) */
 import { MicrosoftTeamsUserIdentifier } from '@azure/communication-common';
 import { videoStreamRendererViewDeclaratify } from './VideoStreamRendererViewDeclarative';
+/* @conditional-compile-remove(together-mode) */
+import { createView as createCallFeatureView, disposeView as disposeCallFeatureView } from './CallFeatureStreamUtils';
 
 /**
  * Defines the methods that allow CallClient {@link @azure/communication-calling#CallClient} to be used statefully.
@@ -53,8 +59,10 @@ import { videoStreamRendererViewDeclaratify } from './VideoStreamRendererViewDec
  *   - RemoteVideoStream 'isAvailableChanged'
  *   - TranscriptionCallFeature 'isTranscriptionActiveChanged'
  *   - RecordingCallFeature 'isRecordingActiveChanged'
+ *   - LocalRecordingCallFeature 'isLocalRecordingActiveChanged'
  *   - RaiseHandCallFeature 'raisedHandEvent'
  *   - RaiseHandCallFeature 'loweredHandEvent'
+ *   - PPTLiveCallFeature 'isAciveChanged'
  *   - ReactionCallFeature 'reaction'
  *
  * @public
@@ -109,7 +117,10 @@ export interface StatefulCallClient extends CallClient {
   createView(
     callId: string | undefined,
     participantId: CommunicationIdentifier | undefined,
-    stream: LocalVideoStreamState | RemoteVideoStreamState,
+    stream:
+      | LocalVideoStreamState
+      | RemoteVideoStreamState
+      | /* @conditional-compile-remove(together-mode) */ CallFeatureStreamState,
     options?: CreateViewOptions
   ): Promise<CreateViewResult | undefined>;
   /**
@@ -139,10 +150,11 @@ export interface StatefulCallClient extends CallClient {
   disposeView(
     callId: string | undefined,
     participantId: CommunicationIdentifier | undefined,
-    stream: LocalVideoStreamState | RemoteVideoStreamState
+    stream:
+      | LocalVideoStreamState
+      | RemoteVideoStreamState
+      | /* @conditional-compile-remove(together-mode) */ CallFeatureStreamState
   ): void;
-
-  /** @conditional-compile-remove(one-to-n-calling) */
   /**
    * The CallAgent is used to handle calls.
    * To create the CallAgent, pass a CommunicationTokenCredential object provided from SDK.
@@ -155,6 +167,19 @@ export interface StatefulCallClient extends CallClient {
    * @public
    */
   createCallAgent(...args: Parameters<CallClient['createCallAgent']>): Promise<DeclarativeCallAgent>;
+
+  /**
+   * The TeamsCallAgent is used to handle calls.
+   * To create the TeamsCallAgent, pass a CommunicationTokenCredential object provided from SDK.
+   * - The CallClient can only have one active TeamsCallAgent instance at a time.
+   * - You can create a new CallClient instance to create a new TeamsCallAgent.
+   * - You can dispose of a CallClient's current active TeamsCallAgent, and call the CallClient's
+   *   createTeamsCallAgent() method again to create a new TeamsCallAgent.
+   * @param tokenCredential - The token credential. Use AzureCommunicationTokenCredential from `@azure/communication-common` to create a credential.
+   * @param options - The TeamsCallAgentOptions for additional options like display name.
+   * @public
+   */
+  createTeamsCallAgent(...args: Parameters<CallClient['createTeamsCallAgent']>): Promise<DeclarativeTeamsCallAgent>;
 }
 
 /**
@@ -177,10 +202,7 @@ export type CallStateModifier = (state: CallClientState) => void;
 class ProxyCallClient implements ProxyHandler<CallClient> {
   private _context: CallContext;
   private _internalContext: InternalCallContext;
-  private _callAgent:
-    | DeclarativeCallAgent
-    | /* @conditional-compile-remove(teams-identity-support) */ DeclarativeTeamsCallAgent
-    | undefined;
+  private _callAgent: DeclarativeCallAgent | DeclarativeTeamsCallAgent | undefined;
   private _deviceManager: DeviceManager | undefined;
   private _sdkDeviceManager: DeviceManager | undefined;
 
@@ -208,7 +230,7 @@ class ProxyCallClient implements ProxyHandler<CallClient> {
         );
       }
       case 'createTeamsCallAgent': {
-        /* @conditional-compile-remove(teams-identity-support) */ return this._context.withAsyncErrorTeedToState(
+        return this._context.withAsyncErrorTeedToState(
           async (...args: Parameters<CallClient['createTeamsCallAgent']>): Promise<DeclarativeTeamsCallAgent> => {
             // createCallAgent will throw an exception if the previous callAgent was not disposed. If the previous
             // callAgent was disposed then it would have unsubscribed to events so we can just create a new declarative
@@ -222,7 +244,6 @@ class ProxyCallClient implements ProxyHandler<CallClient> {
           },
           'CallClient.createTeamsCallAgent'
         );
-        return Reflect.get(target, prop);
       }
       case 'getDeviceManager': {
         return this._context.withAsyncErrorTeedToState(async () => {
@@ -247,7 +268,6 @@ class ProxyCallClient implements ProxyHandler<CallClient> {
         }, 'CallClient.getDeviceManager');
       }
       case 'feature': {
-        /* @conditional-compile-remove(unsupported-browser) */
         return this._context.withErrorTeedToState((...args: Parameters<CallClient['feature']>) => {
           if (args[0] === Features.DebugInfo) {
             const feature = target.feature(Features.DebugInfo);
@@ -282,19 +302,7 @@ export type StatefulCallClientArgs = {
    * UserId from SDK. This is provided for developer convenience to easily access the userId from the
    * state. It is not used by StatefulCallClient.
    */
-  userId:
-    | CommunicationUserIdentifier
-    | /* @conditional-compile-remove(teams-identity-support) */ MicrosoftTeamsUserIdentifier;
-  /* @conditional-compile-remove(PSTN-calls) */
-  /**
-   * A phone number in E.164 format that will be used to represent the callers identity. This number is required
-   * to start a PSTN call.
-   *
-   * example: +11234567
-   *
-   * This is not a cached value from the headless calling client.
-   */
-  alternateCallerId?: string;
+  userId: CommunicationUserIdentifier | MicrosoftTeamsUserIdentifier;
 };
 
 /**
@@ -350,11 +358,7 @@ export const _createStatefulCallClientInner = (
   );
   return createStatefulCallClientWithDeps(
     new CallClient(withTelemetryTag(telemetryImplementationHint, options?.callClientOptions)),
-    new CallContext(
-      getIdentifierKind(args.userId),
-      options?.maxStateChangeListeners,
-      /* @conditional-compile-remove(PSTN-calls) */ args.alternateCallerId
-    ),
+    new CallContext(getIdentifierKind(args.userId), options?.maxStateChangeListeners),
     new InternalCallContext()
   );
 };
@@ -386,9 +390,16 @@ export const createStatefulCallClientWithDeps = (
     value: async (
       callId: string | undefined,
       participantId: CommunicationIdentifier | undefined,
-      stream: LocalVideoStreamState | RemoteVideoStreamState,
+      stream:
+        | LocalVideoStreamState
+        | RemoteVideoStreamState
+        | /* @conditional-compile-remove(together-mode) */ CallFeatureStreamState,
       options?: CreateViewOptions
     ): Promise<CreateViewResult | undefined> => {
+      /* @conditional-compile-remove(together-mode) */
+      if ('feature' in stream) {
+        return await createCallFeatureView(context, internalContext, callId, stream, options);
+      }
       const participantIdKind = participantId ? getIdentifierKind(participantId) : undefined;
       const result = await createView(context, internalContext, callId, participantIdKind, stream, options);
       // We only need to declaratify the VideoStreamRendererView object for remote participants. Because the updateScalingMode only needs to be called on remote participant stream views.
@@ -404,14 +415,29 @@ export const createStatefulCallClientWithDeps = (
     value: (
       callId: string | undefined,
       participantId: CommunicationIdentifier | undefined,
-      stream: LocalVideoStreamState | RemoteVideoStreamState
+      stream:
+        | LocalVideoStreamState
+        | RemoteVideoStreamState
+        | /* @conditional-compile-remove(together-mode) */ CallFeatureStreamState
     ): void => {
+      /* @conditional-compile-remove(together-mode) */
+      if ('feature' in stream) {
+        disposeCallFeatureView(context, internalContext, callId, stream);
+      }
       const participantIdKind = participantId ? getIdentifierKind(participantId) : undefined;
       disposeView(context, internalContext, callId, participantIdKind, stream);
     }
   });
 
-  return new Proxy(callClient, new ProxyCallClient(context, internalContext)) as StatefulCallClient;
+  const newStatefulCallClient = new Proxy(
+    callClient,
+    new ProxyCallClient(context, internalContext)
+  ) as StatefulCallClient;
+
+  // Populate initial state
+  newStatefulCallClient.feature(Features.DebugInfo).getEnvironmentInfo();
+
+  return newStatefulCallClient;
 };
 
 const withTelemetryTag = (

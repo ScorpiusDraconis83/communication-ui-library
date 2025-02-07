@@ -7,14 +7,18 @@ import { MessageProps, MessageRenderer, MessageThreadStyles, _ChatMessageProps }
 import { ChatMessage, OnRenderAvatarCallback } from '../../types';
 /* @conditional-compile-remove(data-loss-prevention) */
 import { BlockedMessage } from '../../types';
-/* @conditional-compile-remove(file-sharing) */
-import { FileDownloadHandler } from '../FileDownloadCards';
-import { AttachmentMetadata } from '../FileDownloadCards';
+import { AttachmentMenuAction } from '../../types/Attachment';
+import { AttachmentMetadata } from '@internal/acs-ui-common';
+/* @conditional-compile-remove(rich-text-editor-image-upload) */
+import { AttachmentMetadataInProgress } from '@internal/acs-ui-common';
 /* @conditional-compile-remove(mention) */
 import { MentionOptions } from '../MentionPopover';
 import { MessageStatusIndicatorProps } from '../MessageStatusIndicator';
-import { FluentChatMessageComponentWrapper } from './FluentChatMessageComponentWrapper';
+import { FluentChatMessageComponentWrapperProps } from './MessageComponents/FluentChatMessageComponent';
 import { DefaultSystemMessage } from './DefaultSystemMessage';
+import { InlineImageOptions } from './ChatMessageContent';
+import { FluentChatMyMessageComponent } from './MyMessageComponents/FluentChatMyMessageComponent';
+import { FluentChatMessageComponent } from './MessageComponents/FluentChatMessageComponent';
 
 /**
  * Props for {@link ChatMessageComponentWrapper}
@@ -40,8 +44,6 @@ export type ChatMessageComponentWrapperProps = _ChatMessageProps & {
   showMessageStatus?: boolean;
   participantCount?: number;
   readCount?: number;
-  /* @conditional-compile-remove(file-sharing) */
-  onRenderFileDownloads?: (userId: string, message: ChatMessage) => JSX.Element;
   onActionButtonClick: (
     message: ChatMessage,
     setMessageReadBy: (
@@ -51,15 +53,26 @@ export type ChatMessageComponentWrapperProps = _ChatMessageProps & {
       }[]
     ) => void
   ) => void;
-  /* @conditional-compile-remove(file-sharing) */
-  fileDownloadHandler?: FileDownloadHandler;
   /* @conditional-compile-remove(date-time-customization) */
   onDisplayDateTimeString?: (messageDate: Date) => string;
-  onFetchInlineAttachment: (attachments: AttachmentMetadata[], messageId: string) => Promise<void>;
-  onInlineImageClicked?: (attachmentId: string, messageId: string) => Promise<void>;
-  inlineAttachments: Record<string, Record<string, string>>;
+  inlineImageOptions?: InlineImageOptions;
   /* @conditional-compile-remove(mention) */
   mentionOptions?: MentionOptions;
+  onRenderAttachmentDownloads?: (message: ChatMessage) => JSX.Element;
+  /**
+   * Optional callback to define custom actions for attachments.
+   */
+  actionsForAttachment?: (attachment: AttachmentMetadata, message?: ChatMessage) => AttachmentMenuAction[];
+  /* @conditional-compile-remove(rich-text-editor) */
+  isRichTextEditorEnabled?: boolean;
+  /* @conditional-compile-remove(rich-text-editor-image-upload) */
+  onPaste?: (event: { content: DocumentFragment }) => void;
+  /* @conditional-compile-remove(rich-text-editor-image-upload) */
+  onRemoveInlineImage?: (imageAttributes: Record<string, string>, messageId: string) => void;
+  /* @conditional-compile-remove(rich-text-editor-image-upload) */
+  onInsertInlineImage?: (imageAttributes: Record<string, string>, messageId: string) => void;
+  /* @conditional-compile-remove(rich-text-editor-image-upload) */
+  inlineImagesWithProgress?: AttachmentMetadataInProgress[];
 };
 
 /**
@@ -89,9 +102,7 @@ export const ChatMessageComponentWrapper = (props: ChatMessageComponentWrapperPr
         : styles?.myChatMessageContainer;
     const blockedMessageStyle = styles?.blockedMessageContainer;
     const messageContainerStyle = message.mine ? myChatMessageStyle : blockedMessageStyle;
-    return (
-      <FluentChatMessageComponentWrapper {...props} message={message} messageContainerStyle={messageContainerStyle} />
-    );
+    return fluentChatComponent({ ...props, message: message, messageContainerStyle: messageContainerStyle });
   }
 
   switch (message.messageType) {
@@ -102,9 +113,7 @@ export const ChatMessageComponentWrapper = (props: ChatMessageComponentWrapperPr
           : styles?.myChatMessageContainer;
       const chatMessageStyle = styles?.chatMessageContainer;
       const messageContainerStyle = message.mine ? myChatMessageStyle : chatMessageStyle;
-      return (
-        <FluentChatMessageComponentWrapper {...props} message={message} messageContainerStyle={messageContainerStyle} />
-      );
+      return fluentChatComponent({ ...props, message: message, messageContainerStyle: messageContainerStyle });
     }
 
     case 'system': {
@@ -131,5 +140,13 @@ export const ChatMessageComponentWrapper = (props: ChatMessageComponentWrapperPr
         </div>
       );
     }
+  }
+};
+
+const fluentChatComponent = (props: FluentChatMessageComponentWrapperProps): JSX.Element => {
+  if (props.message.mine === true) {
+    return <FluentChatMyMessageComponent {...props} />;
+  } else {
+    return <FluentChatMessageComponent {...props} />;
   }
 };

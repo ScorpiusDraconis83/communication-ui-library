@@ -2,13 +2,13 @@
 // Licensed under the MIT License.
 
 import { ChatClient } from '@azure/communication-chat';
-import { CommunicationIdentityClient, CommunicationUserToken } from '@azure/communication-identity';
-import { AzureCommunicationTokenCredential } from '@azure/communication-common';
-import { Browser, ConsoleMessage, Page } from '@playwright/test';
+import { CommunicationIdentityClient } from '@azure/communication-identity';
+import { AzureCommunicationTokenCredential, CommunicationUserIdentifier } from '@azure/communication-common';
+import { Browser, ConsoleMessage, Page, PlaywrightWorkerArgs } from '@playwright/test';
 import { v1 } from 'uuid';
 import { CHAT_TOPIC_NAME } from './constants';
 import { CONNECTION_STRING } from './nodeConstants';
-import { ChatUserType, CallUserType, CallWithChatUserType } from './fixtureTypes';
+import { ChatUserType, CallUserType, CallWithChatUserType, WorkerFixture } from './fixtureTypes';
 import { buildUrl } from './utils';
 
 /**
@@ -16,8 +16,20 @@ import { buildUrl } from './utils';
  * To be used in a playwright fixture's 'pages'.
  */
 // eslint-disable-next-line no-empty-pattern, @typescript-eslint/explicit-module-boundary-types, @typescript-eslint/explicit-function-return-type
-export const usePagePerParticipant = async ({ serverUrl, users, browser }, use) => {
-  const pages = await Promise.all(users.map(async (user) => await loadNewPage(browser, buildUrl(serverUrl, user))));
+export const usePagePerParticipant = async (
+  {
+    serverUrl,
+    users,
+    browser
+  }: PlaywrightWorkerArgs & WorkerFixture<ChatUserType | CallUserType | CallWithChatUserType>,
+  use: (pages: Page[]) => Promise<void>
+): Promise<void> => {
+  const pages = await Promise.all(
+    users.map(
+      async (user: ChatUserType | CallUserType | CallWithChatUserType) =>
+        await loadNewPage(browser, buildUrl(serverUrl, user))
+    )
+  );
   await use(pages);
 };
 
@@ -49,7 +61,10 @@ const shouldIgnoreConsoleError = (error: ConsoleMessage): boolean => {
  * To be used in a playwright fixture's 'pages'.
  */
 // eslint-disable-next-line no-empty-pattern, @typescript-eslint/explicit-module-boundary-types, @typescript-eslint/explicit-function-return-type
-export const usePagePerParticipantWithCallPermissions = async ({ browser, serverUrl, users }, use) => {
+export const usePagePerParticipantWithCallPermissions = async (
+  { browser, serverUrl, users }: PlaywrightWorkerArgs & WorkerFixture<CallUserType>,
+  use: (pages: Page[]) => Promise<void>
+): Promise<void> => {
   const pages = await Promise.all(
     users.map(async (user) => {
       const page = await loadNewPageWithPermissionsForCalls(browser, buildUrl(serverUrl, user));
@@ -61,29 +76,46 @@ export const usePagePerParticipantWithCallPermissions = async ({ browser, server
 };
 
 export const createChatThreadAndUsers = async (displayNames: string[]): Promise<Array<ChatUserType>> => {
-  const endpointUrl = new URL(CONNECTION_STRING.replace('endpoint=', '').split(';')[0]).toString();
+  const endpoint = CONNECTION_STRING.replace('endpoint=', '').split(';')[0];
+  if (!endpoint) {
+    throw new Error('Endpoint URL not found in connection string');
+  }
+  const endpointUrl = new URL(endpoint).toString();
   const tokenClient = new CommunicationIdentityClient(CONNECTION_STRING);
-  const userAndTokens: CommunicationUserToken[] = [];
-  for (let i = 0; i < displayNames.length; i++) {
-    userAndTokens.push(await tokenClient.createUserAndToken(['chat']));
+  const userData: {
+    userId: CommunicationUserIdentifier;
+    token: string;
+    displayName: string;
+  }[] = [];
+  for (const displayName of displayNames) {
+    const userAndToken = await tokenClient.createUserAndToken(['chat']);
+    userData.push({
+      userId: userAndToken.user,
+      token: userAndToken.token,
+      displayName: displayName
+    });
   }
 
-  const chatClient = new ChatClient(endpointUrl, new AzureCommunicationTokenCredential(userAndTokens[0].token));
+  if (!userData[0]) {
+    throw new Error('Failed to create user and token');
+  }
+
+  const chatClient = new ChatClient(endpointUrl, new AzureCommunicationTokenCredential(userData[0].token));
   const threadId =
     (
       await chatClient.createChatThread(
         { topic: CHAT_TOPIC_NAME },
         {
-          participants: displayNames.map((displayName, i) => ({ id: userAndTokens[i].user, displayName: displayName }))
+          participants: userData.map((item) => ({ id: item.userId, displayName: item.displayName }))
         }
       )
     ).chatThread?.id ?? '';
 
-  return displayNames.map((displayName, i) => ({
-    userId: userAndTokens[i].user.communicationUserId,
-    token: userAndTokens[i].token,
+  return userData.map((data) => ({
+    userId: data.userId.communicationUserId,
+    token: data.token,
     endpointUrl,
-    displayName,
+    displayName: data.displayName,
     threadId,
     topic: CHAT_TOPIC_NAME
   }));
@@ -117,7 +149,7 @@ const createCallingUserAndToken = async (): Promise<CallUserType> => {
 export const createCallUsers =
   (testParticipants: string[]) =>
   // eslint-disable-next-line no-empty-pattern, @typescript-eslint/explicit-module-boundary-types, @typescript-eslint/explicit-function-return-type
-  async ({}, use) => {
+  async ({}, use: (users: Array<CallUserType>) => Promise<void>) => {
     const groupId = v1();
     const users: Array<CallUserType> = [];
     for (const displayName of testParticipants) {
@@ -133,29 +165,46 @@ export const createCallWithChatObjectsAndUsers = async (
   displayNames: string[]
 ): Promise<Array<CallWithChatUserType>> => {
   const callId = v1();
-  const endpointUrl = new URL(CONNECTION_STRING.replace('endpoint=', '').split(';')[0]).toString();
+  const endpoint = CONNECTION_STRING.replace('endpoint=', '').split(';')[0];
+  if (!endpoint) {
+    throw new Error('Endpoint URL not found in connection string');
+  }
+  const endpointUrl = new URL(endpoint).toString();
   const tokenClient = new CommunicationIdentityClient(CONNECTION_STRING);
-  const userAndTokens: CommunicationUserToken[] = [];
-  for (let i = 0; i < displayNames.length; i++) {
-    userAndTokens.push(await tokenClient.createUserAndToken(['chat', 'voip']));
+  const userData: {
+    userId: CommunicationUserIdentifier;
+    token: string;
+    displayName: string;
+  }[] = [];
+  for (const displayName of displayNames) {
+    const userAndToken = await tokenClient.createUserAndToken(['chat', 'voip']);
+    userData.push({
+      userId: userAndToken.user,
+      token: userAndToken.token,
+      displayName: displayName
+    });
   }
 
-  const chatClient = new ChatClient(endpointUrl, new AzureCommunicationTokenCredential(userAndTokens[0].token));
+  if (!userData[0]) {
+    throw new Error('Failed to create user and token');
+  }
+
+  const chatClient = new ChatClient(endpointUrl, new AzureCommunicationTokenCredential(userData[0].token));
   const threadId =
     (
       await chatClient.createChatThread(
         { topic: CHAT_TOPIC_NAME },
         {
-          participants: displayNames.map((displayName, i) => ({ id: userAndTokens[i].user, displayName: displayName }))
+          participants: userData.map((data) => ({ id: data.userId, displayName: data.displayName }))
         }
       )
     ).chatThread?.id ?? '';
 
-  return displayNames.map((displayName, i) => ({
-    userId: userAndTokens[i].user.communicationUserId,
-    token: userAndTokens[i].token,
+  return userData.map((data) => ({
+    userId: data.userId.communicationUserId,
+    token: data.token,
     endpointUrl,
-    displayName,
+    displayName: data.displayName,
     threadId,
     topic: CHAT_TOPIC_NAME,
     groupId: callId

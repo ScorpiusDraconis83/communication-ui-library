@@ -6,21 +6,30 @@ import {
   AudioDeviceInfo,
   DeviceAccess,
   DominantSpeakersInfo,
+  ParticipantRole,
   ScalingMode,
   VideoDeviceInfo
 } from '@azure/communication-calling';
-/* @conditional-compile-remove(raise-hand) */
-import { RaisedHand } from '@azure/communication-calling';
-/* @conditional-compile-remove(capabilities) */
+/* @conditional-compile-remove(rtt) */
+import { RealTimeTextInfo } from './CallClientState';
+/* @conditional-compile-remove(rtt) */
+import { RealTimeTextInfo as AcsRealTimeTextInfo } from '@azure/communication-calling';
+import { RaisedHand, MediaAccess, MeetingMediaAccess } from '@azure/communication-calling';
+/* @conditional-compile-remove(breakout-rooms) */
+import { BreakoutRoom, BreakoutRoomsSettings } from '@azure/communication-calling';
+
+import { TeamsMeetingAudioConferencingDetails } from '@azure/communication-calling';
+import { convertConferencePhoneInfo } from './Converter';
+/* @conditional-compile-remove(rtt) */
+import { convertFromSDKRealTimeTextToRealTimeTextInfoState } from './Converter';
 import { CapabilitiesChangeInfo, ParticipantCapabilities } from '@azure/communication-calling';
-/* @conditional-compile-remove(close-captions) */
 import { TeamsCaptionsInfo } from '@azure/communication-calling';
-/* @conditional-compile-remove(unsupported-browser) */
+import { CaptionsKind, CaptionsInfo as AcsCaptionsInfo } from '@azure/communication-calling';
 import { EnvironmentInfo } from '@azure/communication-calling';
-/* @conditional-compile-remove(rooms) */ /* @conditional-compile-remove(capabilities) */
-import { ParticipantRole } from '@azure/communication-calling';
+/* @conditional-compile-remove(together-mode) */
+import { TogetherModeVideoStream, TogetherModeSeatingMap } from '@azure/communication-calling';
 import { AzureLogger, createClientLogger, getLogLevel } from '@azure/logger';
-import EventEmitter from 'events';
+import { EventEmitter } from 'events';
 import { enableMapSet, enablePatches, Patch, produce } from 'immer';
 import {
   CallEndReason,
@@ -41,22 +50,26 @@ import {
   CallErrorTarget,
   CallError
 } from './CallClientState';
-/* @conditional-compile-remove(close-captions) */
+import { NotificationTarget, CallNotifications, CallNotification } from './CallClientState';
+import { TeamsIncomingCallState } from './CallClientState';
 import { CaptionsInfo } from './CallClientState';
-/* @conditional-compile-remove(call-transfer) */
+import { ReactionState } from './CallClientState';
 import { AcceptedTransfer } from './CallClientState';
 import { callingStatefulLogger } from './Logger';
 import { CallIdHistory } from './CallIdHistory';
-/* @conditional-compile-remove(video-background-effects) */
 import { LocalVideoStreamVideoEffectsState } from './CallClientState';
-/* @conditional-compile-remove(close-captions) */
+import { convertFromTeamsSDKToCaptionInfoState } from './Converter';
+
 import { convertFromSDKToCaptionInfoState } from './Converter';
-/* @conditional-compile-remove(raise-hand) */
 import { convertFromSDKToRaisedHandState } from './Converter';
-/* @conditional-compile-remove(reaction) */
 import { ReactionMessage } from '@azure/communication-calling';
-/* @conditional-compile-remove(spotlight) */
 import { SpotlightedParticipant } from '@azure/communication-calling';
+/* @conditional-compile-remove(local-recording-notification) */
+import { LocalRecordingInfo } from '@azure/communication-calling';
+/* @conditional-compile-remove(local-recording-notification) */
+import { RecordingInfo } from '@azure/communication-calling';
+/* @conditional-compile-remove(together-mode) */
+import { CallFeatureStreamState, TogetherModeSeatingPositionState } from './CallClientState';
 
 enableMapSet();
 // Needed to generate state diff for verbose logging.
@@ -67,6 +80,10 @@ enablePatches();
  * @private
  */
 export const MAX_CALL_HISTORY_LENGTH = 10;
+/**
+ * @private
+ */
+export const REACTION_ANIMATION_TIME_MS = 4133;
 
 /**
  * @private
@@ -77,14 +94,12 @@ export class CallContext {
   private _emitter: EventEmitter;
   private _atomicId: number;
   private _callIdHistory: CallIdHistory = new CallIdHistory();
-  /* @conditional-compile-remove(reaction) */
-  private _timeOutId: { [key: string]: NodeJS.Timeout } = {};
+  private _timeOutId: { [key: string]: ReturnType<typeof setTimeout> } = {};
+  private _latestCallIdOfNotification: Partial<Record<NotificationTarget, string>> = {};
+  /* @conditional-compile-remove(breakout-rooms) */
+  private _openBreakoutRoom: string | undefined;
 
-  constructor(
-    userId: CommunicationIdentifierKind,
-    maxListeners = 50,
-    /* @conditional-compile-remove(PSTN-calls) */ alternateCallerId?: string
-  ) {
+  constructor(userId: CommunicationIdentifierKind, maxListeners = 50) {
     this._logger = createClientLogger('communication-react:calling-context');
     this._state = {
       calls: {},
@@ -100,9 +115,9 @@ export class CallContext {
       },
       callAgent: undefined,
       userId: userId,
-      /* @conditional-compile-remove(unsupported-browser) */ environmentInfo: undefined,
-      /* @conditional-compile-remove(PSTN-calls) */ alternateCallerId: alternateCallerId,
-      latestErrors: {} as CallErrors
+      environmentInfo: undefined,
+      latestErrors: {} as CallErrors,
+      latestNotifications: {} as CallNotifications
     };
     this._emitter = new EventEmitter();
     this._emitter.setMaxListeners(maxListeners);
@@ -166,26 +181,30 @@ export class CallContext {
         existingCall.localVideoStreams = call.localVideoStreams;
         existingCall.remoteParticipants = call.remoteParticipants;
         existingCall.transcription.isTranscriptionActive = call.transcription.isTranscriptionActive;
-        /* @conditional-compile-remove(optimal-video-count) */
         existingCall.optimalVideoCount.maxRemoteVideoStreams = call.optimalVideoCount.maxRemoteVideoStreams;
         existingCall.recording.isRecordingActive = call.recording.isRecordingActive;
-        /* @conditional-compile-remove(raise-hand) */
         existingCall.raiseHand.raisedHands = call.raiseHand.raisedHands;
-        /* @conditional-compile-remove(raise-hand) */
+        existingCall.pptLive.isActive = call.pptLive.isActive;
         existingCall.raiseHand.localParticipantRaisedHand = call.raiseHand.localParticipantRaisedHand;
-        /* @conditional-compile-remove(rooms) */
         existingCall.role = call.role;
         /* @conditional-compile-remove(total-participant-count) */
         existingCall.totalParticipantCount = call.totalParticipantCount;
         // We don't update the startTime and endTime if we are updating an existing active call
-        /* @conditional-compile-remove(close-captions) */
         existingCall.captionsFeature.currentSpokenLanguage = call.captionsFeature.currentSpokenLanguage;
-        /* @conditional-compile-remove(close-captions) */
         existingCall.captionsFeature.currentCaptionLanguage = call.captionsFeature.currentCaptionLanguage;
+        existingCall.info = call.info;
+
+        existingCall.meetingConference = call.meetingConference;
       } else {
         draft.calls[latestCallId] = call;
       }
     });
+    /**
+     * Remove the incoming call that matches the call if there is one
+     */
+    if (this._state.incomingCalls[call.id]) {
+      this.removeIncomingCall(call.id);
+    }
   }
 
   public removeCall(callId: string): void {
@@ -205,7 +224,10 @@ export class CallContext {
         // Performance note: This loop should run only once because the number of entries
         // is never allowed to exceed MAX_CALL_HISTORY_LENGTH. A loop is used for correctness.
         while (Object.keys(draft.callsEnded).length >= MAX_CALL_HISTORY_LENGTH) {
-          delete draft.callsEnded[findOldestCallEnded(draft.callsEnded)];
+          const oldestCall = findOldestCallEnded(draft.callsEnded);
+          if (oldestCall) {
+            delete draft.callsEnded[oldestCall];
+          }
         }
         draft.callsEnded[latestCallId] = call;
       }
@@ -230,10 +252,23 @@ export class CallContext {
         delete draft.calls[oldCallId];
         draft.calls[newCallId] = call;
       }
+
+      /* @conditional-compile-remove(breakout-rooms) */
+      // Update call ids in latestCallIdsThatPushedNotifications
+      Object.keys(this._latestCallIdOfNotification).forEach((key: string) => {
+        if (this._latestCallIdOfNotification[key as NotificationTarget] === oldCallId) {
+          this._latestCallIdOfNotification[key as NotificationTarget] = newCallId;
+        }
+      });
+
+      /* @conditional-compile-remove(breakout-rooms) */
+      // Update the open breakout room call id if it matches the old call id
+      if (this._openBreakoutRoom === oldCallId) {
+        this._openBreakoutRoom = newCallId;
+      }
     });
   }
 
-  /* @conditional-compile-remove(unsupported-browser) */
   public setEnvironmentInfo(envInfo: EnvironmentInfo): void {
     this.modifyState((draft: CallClientState) => {
       draft.environmentInfo = envInfo;
@@ -312,7 +347,6 @@ export class CallContext {
     });
   }
 
-  /* @conditional-compile-remove(video-background-effects) */
   public setCallLocalVideoStreamVideoEffects(callId: string, videoEffects: LocalVideoStreamVideoEffectsState): void {
     this.modifyState((draft: CallClientState) => {
       const call = draft.calls[this._callIdHistory.latestCallId(callId)];
@@ -334,7 +368,6 @@ export class CallContext {
     });
   }
 
-  /* @conditional-compile-remove(rooms) */ /* @conditional-compile-remove(capabilities) */
   public setRole(callId: string, role: ParticipantRole): void {
     this.modifyState((draft: CallClientState) => {
       const call = draft.calls[this._callIdHistory.latestCallId(callId)];
@@ -372,7 +405,174 @@ export class CallContext {
     });
   }
 
-  /* @conditional-compile-remove(raise-hand) */
+  /* @conditional-compile-remove(local-recording-notification) */
+  public setCallRecordingInfos(
+    callId: string,
+    recordingInfosAdded: RecordingInfo[],
+    lastStoppedRecording: RecordingInfo[]
+  ): void {
+    this.modifyState((draft: CallClientState) => {
+      const call = draft.calls[this._callIdHistory.latestCallId(callId)];
+      if (call) {
+        call.recording.activeRecordings = recordingInfosAdded;
+        call.recording.lastStoppedRecording = lastStoppedRecording;
+      }
+    });
+  }
+
+  /* @conditional-compile-remove(local-recording-notification) */
+  public setCallLocalRecordingActive(callId: string, isRecordingActive: boolean): void {
+    this.modifyState((draft: CallClientState) => {
+      const call = draft.calls[this._callIdHistory.latestCallId(callId)];
+      if (call) {
+        call.localRecording.isLocalRecordingActive = isRecordingActive;
+      }
+    });
+  }
+
+  /* @conditional-compile-remove(local-recording-notification) */
+  public setCallLocalRecordingInfos(
+    callId: string,
+    localRecordingInfosAdded: LocalRecordingInfo[],
+    lastStoppedRecording: LocalRecordingInfo[]
+  ): void {
+    this.modifyState((draft: CallClientState) => {
+      const call = draft.calls[this._callIdHistory.latestCallId(callId)];
+      if (call) {
+        call.localRecording.activeLocalRecordings = localRecordingInfosAdded;
+        call.localRecording.lastStoppedLocalRecording = lastStoppedRecording;
+      }
+    });
+  }
+
+  public setCallPPTLiveActive(callId: string, isActive: boolean): void {
+    this.modifyState((draft: CallClientState) => {
+      const call = draft.calls[this._callIdHistory.latestCallId(callId)];
+      if (call) {
+        call.pptLive.isActive = isActive;
+      }
+    });
+  }
+
+  public setCallParticipantPPTLive(callId: string, participantKey: string, target: HTMLElement | undefined): void {
+    this.modifyState((draft: CallClientState) => {
+      const call = draft.calls[this._callIdHistory.latestCallId(callId)];
+      if (call && participantKey) {
+        const participant = call.remoteParticipants[participantKey];
+        if (participant) {
+          participant.contentSharingStream = target;
+          call.contentSharingRemoteParticipant = participantKey;
+        }
+      }
+    });
+  }
+
+  /* @conditional-compile-remove(together-mode) */
+  public setTogetherModeVideoStreams(
+    callId: string,
+    addedStreams: CallFeatureStreamState[],
+    removedStreams: CallFeatureStreamState[]
+  ): void {
+    this.modifyState((draft: CallClientState) => {
+      const call = draft.calls[this._callIdHistory.latestCallId(callId)];
+      if (call) {
+        for (const stream of removedStreams) {
+          if (stream.mediaStreamType === 'Video') {
+            call.togetherMode.streams.mainVideoStream = undefined;
+            call.togetherMode.isActive = false;
+            call.togetherMode.seatingPositions = {};
+          }
+        }
+
+        for (const newStream of addedStreams) {
+          // This should only be called by the subscriber and some properties are add by other components so if the
+          // stream already exists, only update the values that subscriber knows about.
+          const mainVideoStream = call.togetherMode.streams.mainVideoStream;
+          if (mainVideoStream && mainVideoStream.id === newStream.id) {
+            mainVideoStream.mediaStreamType = newStream.mediaStreamType;
+            mainVideoStream.isAvailable = newStream.isAvailable;
+            mainVideoStream.isReceiving = newStream.isReceiving;
+          } else {
+            call.togetherMode.streams.mainVideoStream = newStream;
+          }
+          call.togetherMode.isActive = true;
+        }
+      }
+    });
+  }
+
+  /* @conditional-compile-remove(together-mode) */
+  public setTogetherModeVideoStreamIsAvailable(callId: string, streamId: number, isAvailable: boolean): void {
+    this.modifyState((draft: CallClientState) => {
+      const call = draft.calls[this._callIdHistory.latestCallId(callId)];
+      if (call) {
+        const stream = call.togetherMode.streams.mainVideoStream;
+        if (stream && stream?.id === streamId) {
+          stream.isAvailable = isAvailable;
+        }
+      }
+    });
+  }
+
+  /* @conditional-compile-remove(together-mode) */
+  public setTogetherModeVideoStreamIsReceiving(callId: string, streamId: number, isReceiving: boolean): void {
+    this.modifyState((draft: CallClientState) => {
+      const call = draft.calls[this._callIdHistory.latestCallId(callId)];
+      if (call) {
+        const stream = call.togetherMode.streams.mainVideoStream;
+        if (stream && stream?.id === streamId) {
+          stream.isReceiving = isReceiving;
+        }
+      }
+    });
+  }
+
+  /* @conditional-compile-remove(together-mode) */
+  public setTogetherModeVideoStreamSize(
+    callId: string,
+    streamId: number,
+    size: { width: number; height: number }
+  ): void {
+    this.modifyState((draft: CallClientState) => {
+      const call = draft.calls[this._callIdHistory.latestCallId(callId)];
+      if (call) {
+        const stream = call.togetherMode.streams.mainVideoStream;
+        if (stream && stream?.id === streamId) {
+          stream.streamSize = size;
+        }
+      }
+    });
+  }
+
+  /* @conditional-compile-remove(together-mode) */
+  public removeTogetherModeVideoStream(callId: string, removedStream: TogetherModeVideoStream[]): void {
+    this.modifyState((draft: CallClientState) => {
+      const call = draft.calls[this._callIdHistory.latestCallId(callId)];
+      if (call) {
+        for (const stream of removedStream) {
+          if (stream.mediaStreamType === 'Video') {
+            call.togetherMode.streams.mainVideoStream = undefined;
+            call.togetherMode.isActive = false;
+          }
+        }
+      }
+    });
+  }
+
+  /* @conditional-compile-remove(together-mode) */
+  public setTogetherModeSeatingCoordinates(callId: string, seatingMap: TogetherModeSeatingMap): void {
+    this.modifyState((draft: CallClientState) => {
+      const call = draft.calls[this._callIdHistory.latestCallId(callId)];
+      if (call) {
+        const seatingPositions: Record<string, TogetherModeSeatingPositionState> = {};
+        for (const [userId, seatingPosition] of seatingMap.entries()) {
+          seatingPositions[userId] = seatingPosition;
+        }
+        call.togetherMode.seatingPositions = seatingPositions;
+      }
+    });
+  }
+
   public setCallRaisedHands(callId: string, raisedHands: RaisedHand[]): void {
     this.modifyState((draft: CallClientState) => {
       const call = draft.calls[this._callIdHistory.latestCallId(callId)];
@@ -393,7 +593,6 @@ export class CallContext {
     });
   }
 
-  /* @conditional-compile-remove(raise-hand) */
   public setParticipantIsRaisedHand(callId: string, participantKey: string, raisedHand: RaisedHand | undefined): void {
     this.modifyState((draft: CallClientState) => {
       const call = draft.calls[this._callIdHistory.latestCallId(callId)];
@@ -406,7 +605,6 @@ export class CallContext {
     });
   }
 
-  /* @conditional-compile-remove(reaction) */
   public setReceivedReactionFromParticipant(
     callId: string,
     participantKey: string,
@@ -422,12 +620,17 @@ export class CallContext {
       clearTimeout(this._timeOutId[participantKey]);
 
       const participant = call.remoteParticipants[participantKey];
-      const newReactionState = reactionMessage
-        ? { reactionMessage: reactionMessage, receivedAt: new Date() }
+      const newReactionState: ReactionState | undefined = reactionMessage
+        ? { reactionMessage: reactionMessage, receivedOn: new Date() }
         : undefined;
 
       if (participantKey === toFlatCommunicationIdentifier(this._state.userId)) {
         call.localParticipantReaction = newReactionState;
+      } else if (!participant) {
+        // Warn if we can't find the participant in the call but we are trying to set their reaction state to a new reaction.
+        if (reactionMessage !== null) {
+          console.warn(`Participant ${participantKey} not found in call ${callId}. Cannot set reaction state.`);
+        }
       } else {
         participant.reactionState = newReactionState;
       }
@@ -435,7 +638,7 @@ export class CallContext {
       if (reactionMessage) {
         this._timeOutId[participantKey] = setTimeout(() => {
           clearParticipantReactionState(this, callId, participantKey);
-        }, 5120);
+        }, REACTION_ANIMATION_TIME_MS);
       }
     });
   }
@@ -449,7 +652,6 @@ export class CallContext {
     });
   }
 
-  /* @conditional-compile-remove(capabilities) */
   public setCapabilities(
     callId: string,
     capabilities: ParticipantCapabilities,
@@ -463,27 +665,129 @@ export class CallContext {
     });
   }
 
-  /* @conditional-compile-remove(spotlight) */
-  public setSpotlight(callId: string, spotlightedParticipants: SpotlightedParticipant[]): void {
+  public setHideAttendeeNames(callId: string, capabilitiesChangeInfo: CapabilitiesChangeInfo): void {
     this.modifyState((draft: CallClientState) => {
       const call = draft.calls[this._callIdHistory.latestCallId(callId)];
-      if (call) {
-        call.spotlight = { spotlightedParticipants };
+      if (capabilitiesChangeInfo.oldValue.viewAttendeeNames !== capabilitiesChangeInfo.newValue.viewAttendeeNames) {
+        const viewAttendeeNames = capabilitiesChangeInfo.newValue.viewAttendeeNames;
+        if (
+          call &&
+          viewAttendeeNames &&
+          !viewAttendeeNames.isPresent &&
+          viewAttendeeNames.reason === 'MeetingRestricted'
+        ) {
+          call.hideAttendeeNames = true;
+        } else if (call) {
+          call.hideAttendeeNames = false;
+        }
       }
     });
   }
 
-  /* @conditional-compile-remove(spotlight) */
+  public setSpotlight(
+    callId: string,
+    spotlightedParticipants: SpotlightedParticipant[],
+    maxParticipantsToSpotlight: number
+  ): void {
+    this.modifyState((draft: CallClientState) => {
+      const call = draft.calls[this._callIdHistory.latestCallId(callId)];
+      if (call) {
+        call.spotlight = { ...call.spotlight, spotlightedParticipants, maxParticipantsToSpotlight };
+      }
+    });
+  }
+
+  public setTeamsMeetingConference(
+    callId: string,
+    teamsMeetingConferenceDetails: TeamsMeetingAudioConferencingDetails
+  ): void {
+    this.modifyState((draft: CallClientState) => {
+      const call = draft.calls[this._callIdHistory.latestCallId(callId)];
+      if (call) {
+        call.meetingConference = { conferencePhones: convertConferencePhoneInfo(teamsMeetingConferenceDetails) };
+      }
+    });
+  }
+
   public setParticipantSpotlighted(callId: string, spotlightedParticipant: SpotlightedParticipant): void {
     this.modifyState((draft: CallClientState) => {
       const call = draft.calls[this._callIdHistory.latestCallId(callId)];
       if (call) {
         const participant = call.remoteParticipants[toFlatCommunicationIdentifier(spotlightedParticipant.identifier)];
         if (participant) {
-          participant.spotlighted = { spotlightedOrderPosition: spotlightedParticipant.order };
+          participant.spotlight = { spotlightedOrderPosition: spotlightedParticipant.order };
+        } else if (
+          call.spotlight &&
+          toFlatCommunicationIdentifier(draft.userId) ===
+            toFlatCommunicationIdentifier(spotlightedParticipant.identifier)
+        ) {
+          call.spotlight.localParticipantSpotlight = { spotlightedOrderPosition: spotlightedParticipant.order };
         }
       }
     });
+  }
+
+  public setParticipantNotSpotlighted(callId: string, spotlightedParticipant: SpotlightedParticipant): void {
+    this.modifyState((draft: CallClientState) => {
+      const call = draft.calls[this._callIdHistory.latestCallId(callId)];
+      if (call) {
+        const participant = call.remoteParticipants[toFlatCommunicationIdentifier(spotlightedParticipant.identifier)];
+        if (participant) {
+          participant.spotlight = undefined;
+        } else if (
+          call.spotlight &&
+          toFlatCommunicationIdentifier(draft.userId) ===
+            toFlatCommunicationIdentifier(spotlightedParticipant.identifier)
+        ) {
+          call.spotlight.localParticipantSpotlight = undefined;
+        }
+      }
+    });
+  }
+
+  /* @conditional-compile-remove(breakout-rooms) */
+  public setAssignedBreakoutRoom(callId: string, breakoutRoom?: BreakoutRoom): void {
+    this.modifyState((draft: CallClientState) => {
+      const call = draft.calls[this._callIdHistory.latestCallId(callId)];
+      if (call) {
+        call.breakoutRooms = { ...call.breakoutRooms, assignedBreakoutRoom: breakoutRoom };
+      }
+    });
+  }
+
+  /* @conditional-compile-remove(breakout-rooms) */
+  public setBreakoutRoomSettings(callId: string, breakoutRoomSettings: BreakoutRoomsSettings): void {
+    this.modifyState((draft: CallClientState) => {
+      const call = draft.calls[this._callIdHistory.latestCallId(callId)];
+      if (call) {
+        call.breakoutRooms = { ...call.breakoutRooms, breakoutRoomSettings: breakoutRoomSettings };
+      }
+    });
+  }
+
+  /* @conditional-compile-remove(breakout-rooms) */
+  public setBreakoutRoomDisplayName(callId: string, breakoutRoomDisplayName: string): void {
+    this.modifyState((draft: CallClientState) => {
+      const call = draft.calls[this._callIdHistory.latestCallId(callId)];
+      if (call) {
+        call.breakoutRooms = { ...call.breakoutRooms, breakoutRoomDisplayName };
+      }
+    });
+  }
+
+  /* @conditional-compile-remove(breakout-rooms) */
+  public setOpenBreakoutRoom(callId: string): void {
+    this._openBreakoutRoom = callId;
+  }
+
+  /* @conditional-compile-remove(breakout-rooms) */
+  public deleteOpenBreakoutRoom(): void {
+    this._openBreakoutRoom = undefined;
+  }
+
+  /* @conditional-compile-remove(breakout-rooms) */
+  public getOpenBreakoutRoom(): string | undefined {
+    return this._openBreakoutRoom;
   }
 
   public setCallScreenShareParticipant(callId: string, participantKey: string | undefined): void {
@@ -513,6 +817,25 @@ export class CallContext {
     });
   }
 
+  /* @conditional-compile-remove(together-mode) */
+  public setTogetherModeVideoStreamRendererView(
+    callId: string,
+    togetherModeStreamType: string,
+    view: VideoStreamRendererViewState | undefined
+  ): void {
+    this.modifyState((draft: CallClientState) => {
+      const call = draft.calls[this._callIdHistory.latestCallId(callId)];
+      if (call) {
+        if (togetherModeStreamType === 'Video') {
+          const togetherModeStream = call.togetherMode.streams.mainVideoStream;
+          if (togetherModeStream) {
+            togetherModeStream.view = view;
+          }
+        }
+      }
+    });
+  }
+
   public setParticipantState(callId: string, participantKey: string, state: RemoteParticipantStatus): void {
     this.modifyState((draft: CallClientState) => {
       const call = draft.calls[this._callIdHistory.latestCallId(callId)];
@@ -537,7 +860,6 @@ export class CallContext {
     });
   }
 
-  /* @conditional-compile-remove(optimal-video-count) */
   public setOptimalVideoCount(callId: string, optimalVideoCount: number): void {
     this.modifyState((draft: CallClientState) => {
       const call = draft.calls[this._callIdHistory.latestCallId(callId)];
@@ -547,7 +869,6 @@ export class CallContext {
     });
   }
 
-  /* @conditional-compile-remove(rooms) */
   public setParticipantRole(callId: string, participantKey: string, role: ParticipantRole): void {
     this.modifyState((draft: CallClientState) => {
       const call = draft.calls[this._callIdHistory.latestCallId(callId)];
@@ -595,7 +916,6 @@ export class CallContext {
           const existingStream = participant.videoStreams[stream.id];
           if (existingStream) {
             existingStream.isAvailable = stream.isAvailable;
-            /* @conditional-compile-remove(video-stream-is-receiving-flag) */
             existingStream.isReceiving = stream.isReceiving;
             existingStream.mediaStreamType = stream.mediaStreamType;
           } else {
@@ -626,7 +946,6 @@ export class CallContext {
     });
   }
 
-  /* @conditional-compile-remove(video-stream-is-receiving-flag) */
   public setRemoteVideoStreamIsReceiving(
     callId: string,
     participantKey: string,
@@ -647,7 +966,6 @@ export class CallContext {
     });
   }
 
-  /* @conditional-compile-remove(pinned-participants) */
   public setRemoteVideoStreamSize(
     callId: string,
     participantKey: string,
@@ -690,7 +1008,6 @@ export class CallContext {
             if (stream) {
               stream.mediaStreamType = newStream.mediaStreamType;
               stream.isAvailable = newStream.isAvailable;
-              /* @conditional-compile-remove(video-stream-is-receiving-flag) */
               stream.isReceiving = newStream.isReceiving;
             } else {
               participant.videoStreams[newStream.id] = newStream;
@@ -741,7 +1058,7 @@ export class CallContext {
     });
   }
 
-  public setIncomingCall(call: IncomingCallState): void {
+  public setIncomingCall(call: IncomingCallState | TeamsIncomingCallState): void {
     this.modifyState((draft: CallClientState) => {
       const existingCall = draft.incomingCalls[call.id];
       if (existingCall) {
@@ -768,7 +1085,10 @@ export class CallContext {
         // Performance note: This loop should run only once because the number of entries
         // is never allowed to exceed MAX_CALL_HISTORY_LENGTH. A loop is used for correctness.
         while (Object.keys(draft.incomingCallsEnded).length >= MAX_CALL_HISTORY_LENGTH) {
-          delete draft.incomingCallsEnded[findOldestCallEnded(draft.incomingCallsEnded)];
+          const oldestCall = findOldestCallEnded(draft.incomingCallsEnded);
+          if (oldestCall) {
+            delete draft.incomingCallsEnded[oldestCall];
+          }
         }
         draft.incomingCallsEnded[callId] = call;
       }
@@ -855,17 +1175,16 @@ export class CallContext {
     });
   }
 
-  /* @conditional-compile-remove(video-background-effects) */
   public setDeviceManagerUnparentedViewVideoEffects(
     localVideoStream: LocalVideoStreamState,
     videoEffects: LocalVideoStreamVideoEffectsState
   ): void {
     this.modifyState((draft: CallClientState) => {
-      const foundIndex = draft.deviceManager.unparentedViews.findIndex(
+      const view = draft.deviceManager.unparentedViews.find(
         (stream) => stream.mediaStreamType === localVideoStream.mediaStreamType
       );
-      if (foundIndex !== -1) {
-        draft.deviceManager.unparentedViews[foundIndex].videoEffects = videoEffects;
+      if (view) {
+        view.videoEffects = videoEffects;
       }
     });
   }
@@ -875,33 +1194,141 @@ export class CallContext {
     this._atomicId++;
     return id;
   }
-  /* @conditional-compile-remove(close-captions) */
-  private processNewCaption(captions: CaptionsInfo[], newCaption: CaptionsInfo): void {
-    // going through current captions to find the last caption said by the same speaker, remove that caption if it's partial and replace with the new caption
-    for (let index = captions.length - 1; index >= 0; index--) {
-      const currentCaption = captions[index];
-      if (
-        currentCaption &&
-        currentCaption.resultType !== 'Final' &&
-        currentCaption.speaker.identifier &&
-        newCaption.speaker.identifier &&
-        toFlatCommunicationIdentifier(currentCaption.speaker.identifier) ===
-          toFlatCommunicationIdentifier(newCaption.speaker.identifier)
-      ) {
-        captions.splice(index, 1);
-        break;
+  /* @conditional-compile-remove(rtt) */
+  private processNewRealTimeText(
+    realTimeTexts: {
+      completedMessages?: RealTimeTextInfo[];
+      currentInProgress?: RealTimeTextInfo[];
+      myInProgress?: RealTimeTextInfo;
+    },
+    newRealTimeText: RealTimeTextInfo
+  ): void {
+    // if the new message is final, push it to completed messages
+    if (newRealTimeText.resultType === 'Final') {
+      if (!realTimeTexts.completedMessages) {
+        realTimeTexts.completedMessages = [];
+      }
+      realTimeTexts.completedMessages?.push(newRealTimeText);
+      // clear the corresponding in progress message
+      if (newRealTimeText.isMe) {
+        realTimeTexts.myInProgress = undefined;
+      } else {
+        realTimeTexts.currentInProgress = realTimeTexts.currentInProgress?.filter(
+          (message) => message.sequenceId !== newRealTimeText.sequenceId
+        );
+      }
+    } else {
+      // if receive partial real time text
+      // if message is from me, assign it to myInProgress
+      if (newRealTimeText.isMe) {
+        realTimeTexts.myInProgress = newRealTimeText;
+      }
+      // if message is from others, assign it to currentInProgress
+      else {
+        if (!realTimeTexts.currentInProgress) {
+          realTimeTexts.currentInProgress = [];
+          realTimeTexts.currentInProgress.push(newRealTimeText);
+          return;
+        }
+        // find the index of the existing in progress message
+        // replace the existing in progress message with the new one
+        const existingIndex = realTimeTexts.currentInProgress?.findIndex(
+          (message) => message.sequenceId === newRealTimeText.sequenceId
+        );
+        if (existingIndex === -1) {
+          realTimeTexts.currentInProgress?.push(newRealTimeText);
+        } else {
+          realTimeTexts.currentInProgress[existingIndex] = newRealTimeText;
+        }
       }
     }
+    // edge case check for in progress messages time out
+    if (!realTimeTexts.completedMessages) {
+      realTimeTexts.completedMessages = [];
+    }
+    this.findTimeoutRealTimeText(realTimeTexts.currentInProgress, realTimeTexts.completedMessages);
+    this.findTimeoutRealTimeText(realTimeTexts.myInProgress, realTimeTexts.completedMessages);
 
-    captions.push(newCaption);
+    // we only want to store up to 50 finalized messages
+    if (realTimeTexts.completedMessages && realTimeTexts.completedMessages?.length > 50) {
+      realTimeTexts.completedMessages.shift();
+    }
+  }
 
+  /* @conditional-compile-remove(rtt) */
+  private findTimeoutRealTimeText(
+    inProgressRealTimeTexts: RealTimeTextInfo[] | RealTimeTextInfo | undefined,
+    completedRealTimeTexts: RealTimeTextInfo[]
+  ): void {
+    // if inProgressRealTimeTexts is an array
+    if (inProgressRealTimeTexts && Array.isArray(inProgressRealTimeTexts)) {
+      // find the in progress real time text that has not been updated for 5 seconds
+      inProgressRealTimeTexts.forEach((realTimeText, index) => {
+        if (realTimeText.updatedTimestamp && Date.now() - realTimeText.updatedTimestamp.getTime() > 5000) {
+          // turn the in progress real time text to final
+          realTimeText.resultType = 'Final';
+          // move the in progress real time text to completed
+          completedRealTimeTexts.push(realTimeText);
+          // remove the in progress real time text from in progress
+          inProgressRealTimeTexts && (inProgressRealTimeTexts as RealTimeTextInfo[]).splice(index, 1);
+        }
+      });
+    } else {
+      // if inProgressRealTimeTexts is a single object
+      if (
+        inProgressRealTimeTexts &&
+        inProgressRealTimeTexts.updatedTimestamp &&
+        Date.now() - inProgressRealTimeTexts.updatedTimestamp.getTime() > 5000
+      ) {
+        // turn the in progress real time text to final
+        inProgressRealTimeTexts.resultType = 'Final';
+        // move the in progress real time text to completed
+        completedRealTimeTexts.push(inProgressRealTimeTexts);
+        // remove the in progress real time text from in progress
+        inProgressRealTimeTexts = undefined;
+      }
+    }
+  }
+
+  private processNewCaption(captions: CaptionsInfo[], newCaption: CaptionsInfo): void {
+    // time stamp when new caption comes in
+    newCaption.lastUpdatedTimestamp = new Date();
+    // if this is the first caption, push it in
+    if (captions.length === 0) {
+      captions.push(newCaption);
+    }
+    // if the last caption is final, then push the new one in
+    else if (captions[captions.length - 1]?.resultType === 'Final') {
+      captions.push(newCaption);
+    }
+    // if the last caption is Partial, then check if the speaker is the same as the new caption, if so, update the last caption
+    else {
+      const lastCaption = captions[captions.length - 1];
+      if (
+        lastCaption &&
+        lastCaption.speaker.identifier &&
+        newCaption.speaker.identifier &&
+        toFlatCommunicationIdentifier(lastCaption.speaker.identifier) ===
+          toFlatCommunicationIdentifier(newCaption.speaker.identifier)
+      ) {
+        captions[captions.length - 1] = newCaption;
+      }
+      // if different speaker, ignore the interjector until the current speaker finishes
+      // edge case: if we dont receive the final caption from the current speaker for 5 secs, we turn the current speaker caption to final and push in the new interjector
+      else if (lastCaption?.lastUpdatedTimestamp) {
+        if (Date.now() - lastCaption.lastUpdatedTimestamp.getTime() > 5000) {
+          lastCaption.resultType = 'Final';
+          captions.push(newCaption);
+        }
+      }
+    }
     // If the array length exceeds 50, remove the oldest caption
     if (captions.length > 50) {
       captions.shift();
     }
   }
-  /* @conditional-compile-remove(close-captions) */
-  public addCaption(callId: string, caption: TeamsCaptionsInfo): void {
+
+  public addTeamsCaption(callId: string, caption: TeamsCaptionsInfo): void {
     this.modifyState((draft: CallClientState) => {
       const call = draft.calls[this._callIdHistory.latestCallId(callId)];
       if (call) {
@@ -911,23 +1338,51 @@ export class CallContext {
           currentCaptionLanguage === '' ||
           currentCaptionLanguage === undefined
         ) {
-          this.processNewCaption(call.captionsFeature.captions, convertFromSDKToCaptionInfoState(caption));
+          this.processNewCaption(call?.captionsFeature.captions ?? [], convertFromTeamsSDKToCaptionInfoState(caption));
         }
       }
     });
   }
 
-  /* @conditional-compile-remove(close-captions) */
-  public clearCaptions(callId: string): void {
+  public addCaption(callId: string, caption: AcsCaptionsInfo): void {
     this.modifyState((draft: CallClientState) => {
       const call = draft.calls[this._callIdHistory.latestCallId(callId)];
       if (call) {
-        call.captionsFeature.captions = [];
+        this.processNewCaption(call?.captionsFeature.captions ?? [], convertFromSDKToCaptionInfoState(caption));
+      }
+    });
+  }
+  /* @conditional-compile-remove(rtt) */
+  public addRealTimeText(callId: string, realTimeText: AcsRealTimeTextInfo): void {
+    this.modifyState((draft: CallClientState) => {
+      const call = draft.calls[this._callIdHistory.latestCallId(callId)];
+      if (call) {
+        this.processNewRealTimeText(
+          call.realTimeTextFeature.realTimeTexts,
+          convertFromSDKRealTimeTextToRealTimeTextInfoState(realTimeText)
+        );
       }
     });
   }
 
-  /* @conditional-compile-remove(close-captions) */
+  public setCaptionsKind(callId: string, kind: CaptionsKind): void {
+    this.modifyState((draft: CallClientState) => {
+      const call = draft.calls[this._callIdHistory.latestCallId(callId)];
+      if (call) {
+        call.captionsFeature.captionsKind = kind;
+      }
+    });
+  }
+
+  public clearCaptions(callId: string): void {
+    this.modifyState((draft: CallClientState) => {
+      const call = draft.calls[this._callIdHistory.latestCallId(callId)];
+      if (call) {
+        call.captionsFeature.captions = call.captionsFeature.captions.filter((c) => 'message' in c);
+      }
+    });
+  }
+
   setIsCaptionActive(callId: string, isCaptionsActive: boolean): void {
     this.modifyState((draft: CallClientState) => {
       const call = draft.calls[this._callIdHistory.latestCallId(callId)];
@@ -936,8 +1391,16 @@ export class CallContext {
       }
     });
   }
+  /* @conditional-compile-remove(rtt) */
+  setIsRealTimeTextActive(callId: string, isRealTimeTextActive: boolean): void {
+    this.modifyState((draft: CallClientState) => {
+      const call = draft.calls[this._callIdHistory.latestCallId(callId)];
+      if (call) {
+        call.realTimeTextFeature.isRealTimeTextFeatureActive = isRealTimeTextActive;
+      }
+    });
+  }
 
-  /* @conditional-compile-remove(close-captions) */
   setStartCaptionsInProgress(callId: string, startCaptionsInProgress: boolean): void {
     this.modifyState((draft: CallClientState) => {
       const call = draft.calls[this._callIdHistory.latestCallId(callId)];
@@ -946,7 +1409,7 @@ export class CallContext {
       }
     });
   }
-  /* @conditional-compile-remove(close-captions) */
+
   setSelectedSpokenLanguage(callId: string, spokenLanguage: string): void {
     this.modifyState((draft: CallClientState) => {
       const call = draft.calls[this._callIdHistory.latestCallId(callId)];
@@ -955,7 +1418,7 @@ export class CallContext {
       }
     });
   }
-  /* @conditional-compile-remove(close-captions) */
+
   setSelectedCaptionLanguage(callId: string, captionLanguage: string): void {
     this.modifyState((draft: CallClientState) => {
       const call = draft.calls[this._callIdHistory.latestCallId(callId)];
@@ -964,7 +1427,7 @@ export class CallContext {
       }
     });
   }
-  /* @conditional-compile-remove(close-captions) */
+
   setAvailableCaptionLanguages(callId: string, captionLanguages: string[]): void {
     this.modifyState((draft: CallClientState) => {
       const call = draft.calls[this._callIdHistory.latestCallId(callId)];
@@ -973,7 +1436,7 @@ export class CallContext {
       }
     });
   }
-  /* @conditional-compile-remove(close-captions) */
+
   setAvailableSpokenLanguages(callId: string, spokenLanguages: string[]): void {
     this.modifyState((draft: CallClientState) => {
       const call = draft.calls[this._callIdHistory.latestCallId(callId)];
@@ -983,7 +1446,6 @@ export class CallContext {
     });
   }
 
-  /* @conditional-compile-remove(call-transfer) */
   setAcceptedTransfer(callId: string, acceptedTransfer: AcceptedTransfer): void {
     this.modifyState((draft: CallClientState) => {
       const call = draft.calls[this._callIdHistory.latestCallId(callId)];
@@ -1060,6 +1522,61 @@ export class CallContext {
       draft.latestErrors[target] = error;
     });
   }
+
+  public setLatestNotification(callId: string, notification: CallNotification): void {
+    this._latestCallIdOfNotification[notification.target] = callId;
+    this.modifyState((draft: CallClientState) => {
+      draft.latestNotifications[notification.target] = notification;
+    });
+  }
+
+  public deleteLatestNotification(notificationTarget: NotificationTarget, callId?: string): void {
+    const callIdOfNotification = this._latestCallIdOfNotification[notificationTarget];
+
+    // Only delete the notification if the call that pushed the notification is the same as the callId if specified
+    if (callId && callIdOfNotification !== callId) {
+      return;
+    }
+
+    this.modifyState((draft: CallClientState) => {
+      delete draft.latestNotifications[notificationTarget];
+    });
+  }
+
+  public setMediaAccesses(callId: string, mediaAccesses: MediaAccess[]): void {
+    this.modifyState((draft: CallClientState) => {
+      const call = draft.calls[this._callIdHistory.latestCallId(callId)];
+      if (!call) {
+        return;
+      }
+
+      mediaAccesses.forEach((participantMediaAccess) => {
+        const participant = call.remoteParticipants[toFlatCommunicationIdentifier(participantMediaAccess.participant)];
+        if (participant) {
+          participant.mediaAccess = {
+            isAudioPermitted: participantMediaAccess.isAudioPermitted,
+            isVideoPermitted: participantMediaAccess.isVideoPermitted
+          };
+        }
+      });
+    });
+  }
+
+  public setMeetingMediaAccess(callId: string, meetingMediaAccess: MeetingMediaAccess): void {
+    this.modifyState((draft: CallClientState) => {
+      const call = draft.calls[this._callIdHistory.latestCallId(callId)];
+      if (!call) {
+        return;
+      }
+
+      if (meetingMediaAccess) {
+        call.meetingMediaAccess = {
+          isAudioPermitted: meetingMediaAccess.isAudioPermitted,
+          isVideoPermitted: meetingMediaAccess.isVideoPermitted
+        };
+      }
+    });
+  }
 }
 
 const toCallError = (target: CallErrorTarget, error: unknown): CallError => {
@@ -1069,12 +1586,19 @@ const toCallError = (target: CallErrorTarget, error: unknown): CallError => {
   return new CallError(target, new Error(error as string));
 };
 
-const findOldestCallEnded = (calls: { [key: string]: { endTime?: Date } }): string => {
+const findOldestCallEnded = (calls: { [key: string]: { endTime?: Date } }): string | undefined => {
   const callEntries = Object.entries(calls);
-  let [oldestCallId, oldestCall] = callEntries[0];
+  const firstCallEntry = callEntries[0];
+
+  if (!firstCallEntry) {
+    return undefined; // no calls exist
+  }
+
+  let [oldestCallId, oldestCall] = firstCallEntry;
   if (oldestCall.endTime === undefined) {
     return oldestCallId;
   }
+
   for (const [callId, call] of callEntries.slice(1)) {
     if (call.endTime === undefined) {
       return callId;
@@ -1086,7 +1610,6 @@ const findOldestCallEnded = (calls: { [key: string]: { endTime?: Date } }): stri
   return oldestCallId;
 };
 
-/* @conditional-compile-remove(reaction) */
 function clearParticipantReactionState(callContext: CallContext, callId: string, participantKey: string): void {
   callContext.setReceivedReactionFromParticipant(callId, participantKey, null);
 }

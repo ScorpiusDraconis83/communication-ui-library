@@ -2,6 +2,9 @@
 // Licensed under the MIT License.
 import { ErrorBar, MessageThread, ParticipantList, SendBox, TypingIndicator } from '@internal/react-components';
 
+/* @conditional-compile-remove(rich-text-editor) */
+import type { RichTextSendBox } from '@internal/react-components';
+
 import { useHandlers } from './useHandlers';
 import { useSelector } from './useSelector';
 import { SendBoxSelector, sendBoxSelector } from '../sendBoxSelector';
@@ -51,20 +54,20 @@ export const usePropsFor = <Component extends (props: any) => JSX.Element>(
  *
  * @public
  */
-export type GetSelector<Component extends (props: any) => JSX.Element | undefined> = AreEqual<
-  Component,
-  typeof SendBox
-> extends true
-  ? SendBoxSelector
-  : AreEqual<Component, typeof MessageThread> extends true
-  ? MessageThreadSelector
-  : AreEqual<Component, typeof TypingIndicator> extends true
-  ? TypingIndicatorSelector
-  : AreEqual<Component, typeof ParticipantList> extends true
-  ? ChatParticipantListSelector
-  : AreEqual<Component, typeof ErrorBar> extends true
-  ? ErrorBarSelector
-  : undefined;
+export type GetSelector<Component extends (props: any) => JSX.Element | undefined> =
+  AreEqual<Component, typeof SendBox> extends true
+    ? SendBoxSelector
+    : AreEqual<Component, typeof RichTextSendBox> extends true
+      ? /* @conditional-compile-remove(rich-text-editor) */ SendBoxSelector
+      : AreEqual<Component, typeof MessageThread> extends true
+        ? MessageThreadSelector
+        : AreEqual<Component, typeof TypingIndicator> extends true
+          ? TypingIndicatorSelector
+          : AreEqual<Component, typeof ParticipantList> extends true
+            ? ChatParticipantListSelector
+            : AreEqual<Component, typeof ErrorBar> extends true
+              ? ErrorBarSelector
+              : undefined;
 
 /**
  * Get the selector for a specified component.
@@ -90,12 +93,15 @@ const findSelector = (component: (props: any) => JSX.Element | undefined): any =
     const threadId = useContext(ChatThreadClientContext)?.threadId ?? 'default-id-when-not-in-provider';
     let messageThreadSelectorImpl = messageThreadSelectorsByThread[threadId];
     if (!messageThreadSelectorImpl) {
-      messageThreadSelectorsByThread[threadId] = messageThreadSelectorWithThread();
-      messageThreadSelectorImpl = messageThreadSelectorsByThread[threadId];
+      messageThreadSelectorImpl = messageThreadSelectorWithThread();
+      messageThreadSelectorsByThread[threadId] = messageThreadSelectorImpl;
     }
     return messageThreadSelectorImpl;
   };
-
+  /* @conditional-compile-remove(rich-text-editor) */
+  if (typeof component === 'function' && component.name === 'RichTextSendBox') {
+    return sendBoxSelector;
+  }
   switch (component) {
     case SendBox:
       return sendBoxSelector;

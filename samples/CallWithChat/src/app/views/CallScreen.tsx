@@ -1,19 +1,22 @@
 // Copyright (c) Microsoft Corporation.
 // Licensed under the MIT License.
 
-import { TeamsMeetingLinkLocator } from '@azure/communication-calling';
+import { TeamsMeetingLinkLocator, TeamsMeetingIdLocator } from '@azure/communication-calling';
 import { CommunicationUserIdentifier } from '@azure/communication-common';
 import {
-  toFlatCommunicationIdentifier,
-  useAzureCommunicationCallWithChatAdapter,
+  AzureCommunicationCallAdapterOptions,
   CallAndChatLocator,
+  CallWithChatAdapter,
   CallWithChatAdapterState,
   CallWithChatComposite,
-  CallWithChatAdapter,
-  CallWithChatCompositeOptions
+  CallWithChatCompositeOptions,
+  onResolveDeepNoiseSuppressionDependencyLazy,
+  onResolveVideoEffectDependencyLazy,
+  toFlatCommunicationIdentifier,
+  useAzureCommunicationCallWithChatAdapter
 } from '@azure/communication-react';
-/* @conditional-compile-remove(video-background-effects) */
-import { onResolveVideoEffectDependencyLazy, AzureCommunicationCallAdapterOptions } from '@azure/communication-react';
+/* @conditional-compile-remove(file-sharing-acs) */
+import { attachmentUploadOptions } from '../../../../Chat/src/app/utils/uploadHandler';
 import { Spinner } from '@fluentui/react';
 import React, { useCallback, useEffect, useMemo, useRef } from 'react';
 import { useSwitchableFluentTheme } from '../theming/SwitchableFluentThemeProvider';
@@ -27,8 +30,9 @@ export interface CallScreenProps {
   userId: CommunicationUserIdentifier;
   displayName: string;
   endpoint: string;
-  locator: CallAndChatLocator | TeamsMeetingLinkLocator;
-  /* @conditional-compile-remove(PSTN-calls) */ alternateCallerId?: string;
+  locator: CallAndChatLocator | TeamsMeetingLinkLocator | TeamsMeetingIdLocator;
+  alternateCallerId?: string;
+  /* @conditional-compile-remove(rich-text-editor-composite-support) */ isRichTextEditorEnabled?: boolean;
 }
 
 export const CallScreen = (props: CallScreenProps): JSX.Element => {
@@ -38,53 +42,63 @@ export const CallScreen = (props: CallScreenProps): JSX.Element => {
     displayName,
     endpoint,
     locator,
-    /* @conditional-compile-remove(PSTN-calls) */ alternateCallerId
+    alternateCallerId,
+    /* @conditional-compile-remove(rich-text-editor-composite-support) */ isRichTextEditorEnabled
   } = props;
 
-  /* @conditional-compile-remove(video-background-effects) */
   const callAdapterOptions: AzureCommunicationCallAdapterOptions = useMemo(() => {
     const videoBackgroundImages = [
       {
         key: 'ab1',
-        url: '/assets/backgrounds/contoso.png',
+        url: 'assets/backgrounds/contoso.png',
         tooltipText: 'Custom Background'
       },
       {
         key: 'ab2',
-        url: '/assets/backgrounds/abstract2.jpg',
+        url: 'assets/backgrounds/abstract2.jpg',
         tooltipText: 'Custom Background'
       },
       {
         key: 'ab3',
-        url: '/assets/backgrounds/abstract3.jpg',
+        url: 'assets/backgrounds/abstract3.jpg',
         tooltipText: 'Custom Background'
       },
       {
         key: 'ab4',
-        url: '/assets/backgrounds/room1.jpg',
+        url: 'assets/backgrounds/room1.jpg',
         tooltipText: 'Custom Background'
       },
       {
         key: 'ab5',
-        url: '/assets/backgrounds/room2.jpg',
+        url: 'assets/backgrounds/room2.jpg',
         tooltipText: 'Custom Background'
       },
       {
         key: 'ab6',
-        url: '/assets/backgrounds/room3.jpg',
+        url: 'assets/backgrounds/room3.jpg',
         tooltipText: 'Custom Background'
       },
       {
         key: 'ab7',
-        url: '/assets/backgrounds/room4.jpg',
+        url: 'assets/backgrounds/room4.jpg',
         tooltipText: 'Custom Background'
       }
     ];
     return {
       videoBackgroundOptions: {
         videoBackgroundImages,
-        /* @conditional-compile-remove(video-background-effects) */
+
         onResolveDependency: onResolveVideoEffectDependencyLazy
+      },
+      deepNoiseSuppressionOptions: {
+        onResolveDependency: onResolveDeepNoiseSuppressionDependencyLazy
+      },
+      reactionResources: {
+        likeReaction: { url: 'assets/reactions/likeEmoji.png', frameCount: 102 },
+        heartReaction: { url: 'assets/reactions/heartEmoji.png', frameCount: 102 },
+        laughReaction: { url: 'assets/reactions/laughEmoji.png', frameCount: 102 },
+        applauseReaction: { url: 'assets/reactions/clapEmoji.png', frameCount: 102 },
+        surprisedReaction: { url: 'assets/reactions/surprisedEmoji.png', frameCount: 102 }
       }
     };
   }, []);
@@ -95,6 +109,24 @@ export const CallScreen = (props: CallScreenProps): JSX.Element => {
     document.body.style.overflow = 'hidden';
     return () => {
       document.body.style.overflow = 'null';
+    };
+  }, []);
+
+  // Update stale mobile browsers
+  useEffect(() => {
+    /**
+     * We want to make sure that the page is up to date. If for example a browser is dismissed
+     * on mobile, the page will be stale when opened again. This event listener will reload the page
+     */
+    window.addEventListener('pageshow', (event) => {
+      if (event.persisted) {
+        window.location.reload();
+      }
+    });
+    return () => {
+      window.removeEventListener('pageshow', () => {
+        window.location.reload();
+      });
     };
   }, []);
 
@@ -140,21 +172,47 @@ export const CallScreen = (props: CallScreenProps): JSX.Element => {
       credential,
       endpoint,
       locator,
-      /* @conditional-compile-remove(PSTN-calls) */ alternateCallerId,
-      /* @conditional-compile-remove(video-background-effects) */ callAdapterOptions
+      alternateCallerId,
+      callAdapterOptions: callAdapterOptions
     },
     afterAdapterCreate
   );
 
   const shouldHideScreenShare = isMobileSession || isIOS();
 
+  /* @conditional-compile-remove(file-sharing-acs) */
+  const attachmentOptions = useMemo(() => {
+    // Returning undefined for none group call locators
+    // This includes teams meeting link and teams meeting id locators
+    // Because BYOS file sharing in interop chat is not supported currently
+    if (locator && !isGroupCallLocator(locator)) {
+      return undefined;
+    }
+    return {
+      uploadOptions: attachmentUploadOptions
+    };
+  }, [locator]);
+
   const options: CallWithChatCompositeOptions = useMemo(
     () => ({
       callControls: {
-        screenShareButton: shouldHideScreenShare ? false : undefined
-      }
+        screenShareButton: shouldHideScreenShare ? false : undefined,
+        endCallButton: {
+          hangUpForEveryone: 'endCallOptions'
+        }
+      },
+      /* @conditional-compile-remove(file-sharing-acs) */
+      attachmentOptions: attachmentOptions,
+      /* @conditional-compile-remove(rich-text-editor-composite-support) */
+      richTextEditor: isRichTextEditorEnabled
     }),
-    [shouldHideScreenShare]
+    [
+      /* @conditional-compile-remove(file-sharing-acs) */
+      attachmentOptions,
+      /* @conditional-compile-remove(rich-text-editor-composite-support) */
+      isRichTextEditorEnabled,
+      shouldHideScreenShare
+    ]
   );
 
   // Dispose of the adapter in the window's before unload event.
@@ -172,10 +230,9 @@ export const CallScreen = (props: CallScreenProps): JSX.Element => {
 
   let callInvitationUrl: string | undefined = window.location.href;
   // Only show the call invitation url if the call is a group call or Teams call, do not show for Rooms, 1:1 or 1:N calls
-  if (!isGroupCallLocator(locator) && !isTeamsMeetingLinkLocator(locator)) {
+  if (!isGroupCallLocator(locator) && !isTeamsMeetingLinkLocator(locator) && !isTeamsMeetingIdLocator(locator)) {
     callInvitationUrl = undefined;
   }
-
   return (
     <CallWithChatComposite
       adapter={adapter}
@@ -192,6 +249,8 @@ const convertPageStateToString = (state: CallWithChatAdapterState): string => {
   switch (state.page) {
     case 'accessDeniedTeamsMeeting':
       return 'error';
+    case 'badRequest':
+      return 'error';
     case 'leftCall':
       return 'end call';
     case 'removedFromCall':
@@ -202,11 +261,17 @@ const convertPageStateToString = (state: CallWithChatAdapterState): string => {
 };
 
 const isTeamsMeetingLinkLocator = (
-  locator: TeamsMeetingLinkLocator | CallAndChatLocator
+  locator: TeamsMeetingLinkLocator | CallAndChatLocator | TeamsMeetingIdLocator
 ): locator is TeamsMeetingLinkLocator => {
   return 'meetingLink' in locator;
 };
 
-const isGroupCallLocator = (locator: TeamsMeetingLinkLocator | CallAndChatLocator): boolean => {
+const isTeamsMeetingIdLocator = (
+  locator: TeamsMeetingLinkLocator | CallAndChatLocator | TeamsMeetingIdLocator
+): locator is TeamsMeetingIdLocator => {
+  return 'meetingId' in locator;
+};
+
+const isGroupCallLocator = (locator: TeamsMeetingLinkLocator | CallAndChatLocator | TeamsMeetingIdLocator): boolean => {
   return 'callLocator' in locator && 'groupId' in locator.callLocator;
 };

@@ -2,7 +2,7 @@
 // Licensed under the MIT License.
 
 import { ChatParticipant } from '@azure/communication-chat';
-import { Page, test as base } from '@playwright/test';
+import { Browser, Page, test as base } from '@playwright/test';
 import { nanoid } from 'nanoid';
 import path from 'path';
 import { createTestServer } from '../../common/server';
@@ -28,7 +28,8 @@ export const buildUrlForChatAppUsingFakeAdapter = (
   serverUrl: string,
   fakeChatAdapterArgs: _FakeChatAdapterArgs
 ): string => {
-  return `${serverUrl}?fakeChatAdapterArgs=${JSON.stringify(fakeChatAdapterArgs)}`;
+  const args = { ...fakeChatAdapterArgs, serverUrl: serverUrl };
+  return `${serverUrl}?fakeChatAdapterArgs=${JSON.stringify(args)}`;
 };
 
 /**
@@ -42,12 +43,15 @@ export const TEST_PARTICIPANTS: ChatParticipant[] = TEST_PARTICIPANTS_CHAT.map((
  * Default fake chat adapter args
  */
 export const DEFAULT_FAKE_CHAT_ADAPTER_ARGS = {
-  localParticipant: TEST_PARTICIPANTS[0],
+  localParticipant: TEST_PARTICIPANTS[0] as ChatParticipant,
   remoteParticipants: TEST_PARTICIPANTS.slice(1)
 };
 
 // eslint-disable-next-line @typescript-eslint/explicit-function-return-type
-const usePage = async ({ serverUrl, browser }, use) => {
+const usePage = async (
+  { serverUrl, browser }: { serverUrl: string; browser: Browser },
+  use: (page: Page) => Promise<void>
+): Promise<void> => {
   const page = await loadNewPage(
     browser,
     buildUrlForChatAppUsingFakeAdapter(serverUrl, DEFAULT_FAKE_CHAT_ADAPTER_ARGS)

@@ -1,16 +1,14 @@
 // Copyright (c) Microsoft Corporation.
 // Licensed under the MIT License.
 
-/* @conditional-compile-remove(capabilities) */
 import React from 'react';
-/* @conditional-compile-remove(capabilities) */
+
 import { IIconProps, IMessageBarProps, MessageBar, MessageBarType, Stack } from '@fluentui/react';
-/* @conditional-compile-remove(capabilities) */
+
 import { CapabilitiesChangedReason, ParticipantCapabilityName, ParticipantRole } from '@azure/communication-calling';
-/* @conditional-compile-remove(capabilities) */
+
 import { useLocale } from '../../localization';
 
-/* @conditional-compile-remove(capabilities) */
 /**
  * @private
  */
@@ -19,7 +17,6 @@ export interface CapabilitiesChangeNotificationBarProps extends IMessageBarProps
   onDismissNotification: (notification: CapabalityChangedNotification) => void;
 }
 
-/* @conditional-compile-remove(capabilities) */
 /**
  * @private
  */
@@ -32,12 +29,12 @@ export interface CapabalityChangedNotification {
    * Is capability now available
    */
   isPresent: boolean;
-  /* @conditional-compile-remove(capabilities) */
+
   /**
    * Reason capability was changed
    */
   changedReason?: CapabilitiesChangedReason;
-  /* @conditional-compile-remove(capabilities) */
+
   /**
    * Role of participant when capability changed
    */
@@ -51,7 +48,6 @@ export interface CapabalityChangedNotification {
   timestamp?: Date;
 }
 
-/* @conditional-compile-remove(capabilities) */
 /**
  * Notification bar for capabilities changed
  * @private
@@ -87,26 +83,11 @@ export const CapabilitiesChangedNotificationBar = (props: CapabilitiesChangeNoti
   );
 };
 
-/* @conditional-compile-remove(capabilities) */
 const getCapabilityChangedNotificationString = (
   notification: CapabalityChangedNotification,
   strings?: CapabilityChangedNotificationStrings
 ): string | undefined => {
   switch (notification.capabilityName) {
-    case 'turnVideoOn':
-      if (notification.changedReason === 'MeetingOptionOrOrganizerPolicyChanged') {
-        return notification.isPresent
-          ? strings?.turnVideoOn?.grantedDueToMeetingOption
-          : strings?.turnVideoOn?.lostDueToMeetingOption;
-      }
-      break;
-    case 'unmuteMic':
-      if (notification.changedReason === 'MeetingOptionOrOrganizerPolicyChanged') {
-        return notification.isPresent
-          ? strings?.unmuteMic?.grantedDueToMeetingOption
-          : strings?.unmuteMic?.lostDueToMeetingOption;
-      }
-      break;
     case 'shareScreen':
       if (notification.isPresent && notification.changedReason === 'RoleChanged' && notification.role === 'Presenter') {
         return strings?.shareScreen?.grantedDueToRoleChangeToPresenter;
@@ -115,11 +96,25 @@ const getCapabilityChangedNotificationString = (
         return strings?.shareScreen?.lostDueToRoleChangeToAttendee;
       }
       break;
+    case 'viewAttendeeNames':
+      if (
+        !notification.isPresent &&
+        notification.changedReason === 'MeetingOptionOrOrganizerPolicyChanged' &&
+        notification.role === 'Attendee'
+      ) {
+        return strings?.hideAttendeeNames?.hideAttendeeNameAttendee;
+      }
+      if (
+        !notification.isPresent &&
+        notification.changedReason === 'MeetingOptionOrOrganizerPolicyChanged' &&
+        notification.role === 'Presenter'
+      ) {
+        return strings?.hideAttendeeNames?.hideAttendeeNamePresenter;
+      }
   }
   return undefined;
 };
 
-/* @conditional-compile-remove(capabilities) */
 const getCustomMessageBarIconProps = (notification: CapabalityChangedNotification): IIconProps | undefined => {
   let iconName: string | undefined = undefined;
   switch (notification.capabilityName) {
@@ -143,7 +138,6 @@ const getCustomMessageBarIconProps = (notification: CapabalityChangedNotificatio
   return { iconName, styles: { root: { '> *': { height: '1rem', width: '1rem' } } } };
 };
 
-/* @conditional-compile-remove(capabilities) */
 const messageBarStyles = {
   innerText: {
     alignSelf: 'center'
@@ -160,7 +154,6 @@ const messageBarStyles = {
   }
 };
 
-/* @conditional-compile-remove(capabilities) */
 /**
  * Strings for capability changed notification
  * @public
@@ -204,5 +197,19 @@ export interface CapabilityChangedNotificationStrings {
      * Notification message shown to the user when capability to share screen is granted due to a role change to Presenter
      */
     grantedDueToRoleChangeToPresenter?: string;
+  };
+
+  /**
+   * Strings for hidden attendee names capability
+   */
+  hideAttendeeNames?: {
+    /**
+     * Notification message shown to the user when capability to view attendee names is lost due to a meeting option change for Attendee
+     */
+    hideAttendeeNameAttendee?: string;
+    /**
+     * Notification message shown to the user when capability to view attendee names is lost due to a meeting option change for Presenter
+     */
+    hideAttendeeNamePresenter?: string;
   };
 }

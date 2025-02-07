@@ -10,19 +10,31 @@ import { useHandlers } from '../../CallComposite/hooks/useHandlers';
 import { CommonCallControlOptions } from '../types/CommonCallControlOptions';
 /* @condtional-compile-remove(gallery-options) */
 import { VideoGalleryLayout } from '@internal/react-components';
+import { ReactionResources } from '@internal/react-components';
+import { DtmfDialPadOptions } from '../../CallComposite';
 
 /** @private */
 export interface PreparedMoreDrawerProps {
   onLightDismiss: () => void;
   onPeopleButtonClicked: () => void;
   callControls?: boolean | CommonCallControlOptions;
-  /* @conditional-compile-remove(PSTN-calls) */
   onClickShowDialpad?: () => void;
-  /* @conditional-compile-remove(close-captions) */
   isCaptionsSupported?: boolean;
+  /* @conditional-compile-remove(rtt) */
+  isRealTimeTextSupported?: boolean;
   disableButtonsForHoldScreen?: boolean;
   onUserSetGalleryLayout?: (layout: VideoGalleryLayout) => void;
   userSetGalleryLayout?: VideoGalleryLayout;
+  onSetDialpadPage?: () => void;
+  dtmfDialerPresent?: boolean;
+  dtmfDialerOptions?: boolean | DtmfDialPadOptions;
+  useTeamsCaptions?: boolean;
+  reactionResources?: ReactionResources;
+  onClickMeetingPhoneInfo?: () => void;
+  /* @conditional-compile-remove(rtt) */
+  onStartRealTimeText?: () => void;
+  /* @conditional-compile-remove(rtt) */
+  startRealTimeTextButtonChecked?: boolean;
 }
 
 /** @private */
@@ -34,18 +46,15 @@ export const PreparedMoreDrawer = (props: PreparedMoreDrawerProps): JSX.Element 
       audioDeviceMenuTitle: strings.moreDrawerAudioDeviceMenuTitle,
       microphoneMenuTitle: strings.moreDrawerMicrophoneMenuTitle,
       speakerMenuTitle: strings.moreDrawerSpeakerMenuTitle,
-      /* @conditional-compile-remove(close-captions) */
       captionsMenuTitle: strings.moreDrawerCaptionsMenuTitle,
-      /* @conditional-compile-remove(close-captions) */
       spokenLanguageMenuTitle: strings.moreDrawerSpokenLanguageMenuTitle,
-      /* @conditional-compile-remove(close-captions) */
       captionLanguageMenuTitle: strings.moreDrawerCaptionLanguageMenuTitle,
-      /* @conditional-compile-remove(gallery-layouts) */
       galleryOptionsMenuTitle: strings.moreDrawerGalleryOptionsMenuTitle
     }),
     [strings]
   );
   const deviceProps = useSelector(moreDrawerSelector);
   const callHandlers = useHandlers(MoreDrawer);
+
   return <MoreDrawer {...props} {...deviceProps} {...callHandlers} strings={moreDrawerStrings} />;
 };

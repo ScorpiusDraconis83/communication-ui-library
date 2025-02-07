@@ -20,21 +20,22 @@ import {
   WifiWarning20Filled,
   Circle20Regular
 } from '@fluentui/react-icons';
-/* @conditional-compile-remove(capabilities) */
+import { PersonCall20Regular, Clock20Filled } from '@fluentui/react-icons';
+import { MoreHorizontal20Filled, VideoPersonStarOff20Filled } from '@fluentui/react-icons';
 import { MicProhibited20Filled, VideoProhibited20Filled } from '@fluentui/react-icons';
-/* @conditional-compile-remove(gallery-layouts) */
 import { Grid20Regular } from '@fluentui/react-icons';
-/* @conditional-compile-remove(PSTN-calls) */
-import { PersonAdd20Regular, Dialpad20Regular, Call20Regular } from '@fluentui/react-icons';
+import { PersonAdd20Regular, Call20Regular } from '@fluentui/react-icons';
+import { Dialpad20Regular } from '@fluentui/react-icons';
 import { DEFAULT_COMPONENT_ICONS } from '@internal/react-components';
 import React from 'react';
+/* @conditional-compile-remove(together-mode) */
+import { PeopleAudience20Regular } from '@fluentui/react-icons';
 // eslint-disable-next-line no-restricted-imports
 import { FontIcon, IIconProps, Spinner, SpinnerSize } from '@fluentui/react';
-/* @conditional-compile-remove(file-sharing) */
+/* @conditional-compile-remove(file-sharing-acs) */
 import { Attach20Regular } from '@fluentui/react-icons';
-/* @conditional-compile-remove(video-background-effects) */
+
 import { VideoBackgroundEffect20Regular, VideoPerson20Filled } from '@fluentui/react-icons';
-/* @conditional-compile-remove(gallery-layouts) */
 import {
   PersonSquare20Regular,
   WindowHeaderHorizontal20Regular,
@@ -63,10 +64,11 @@ export const COMPOSITE_ONLY_ICONS: CompositeIcons = {
   LocalCameraSwitch: <CameraSwitch24Regular />,
   ControlBarChatButtonActive: <Chat20Filled />,
   ControlBarChatButtonInactive: <Chat20Regular />,
-  /* @conditional-compile-remove(capabilities) */
+
   ControlButtonCameraProhibited: <VideoProhibited20Filled />,
-  /* @conditional-compile-remove(capabilities) */
+
   ControlButtonMicProhibited: <MicProhibited20Filled />,
+  ControlButtonExitSpotlight: <VideoPersonStarOff20Filled />,
   ControlBarPeopleButton: <People20Regular />,
   MoreDrawerMicrophones: <Mic20Regular />,
   MoreDrawerPeople: <People20Regular />,
@@ -79,45 +81,38 @@ export const COMPOSITE_ONLY_ICONS: CompositeIcons = {
   NoticePageJoinCallFailedDueToNoNetwork: <WifiWarning20Filled />,
   NoticePageLeftCall: <CallEnd20Filled />,
   NoticePageRemovedFromCall: <Info20Filled />,
-  /* @conditional-compile-remove(rooms) */
   NoticePageNotInvitedToRoom: <Info20Filled />,
-  /* @conditional-compile-remove(rooms) */
   NoticePageRoomNotFound: <Info20Filled />,
-  /* @conditional-compile-remove(rooms) */
   NoticePageRoomNotValid: <Info20Filled />,
-  /* @conditional-compile-remove(calling-sounds) */
   NoticePageCallRejected: <Info20Filled />,
   NoticePageCallTimeout: <Info20Filled />,
-  /* @conditional-compile-remove(file-sharing) */
+  /* @conditional-compile-remove(file-sharing-acs) */
   SendBoxAttachFile: <Attach20Regular />,
-  /* @conditional-compile-remove(PSTN-calls) */
   PeoplePaneAddPerson: <PersonAdd20Regular />,
-  /* @conditional-compile-remove(PSTN-calls) */
   PeoplePaneOpenDialpad: <Dialpad20Regular />,
-  /* @conditional-compile-remove(PSTN-calls) */
   DialpadStartCall: <Call20Regular />,
-  /* @conditional-compile-remove(rooms) */
   NoticePageInviteToRoomRemoved: <Info20Filled />,
-  /* @conditional-compile-remove(video-background-effects) */
+
   BlurVideoBackground: <VideoBackgroundEffect20Regular />,
-  /* @conditional-compile-remove(video-background-effects) */
+
   RemoveVideoBackgroundEffect: <VideoPerson20Filled />,
-  /* @conditional-compile-remove(gallery-layouts) */
   GalleryOptions: <Grid20Regular />,
-  /* @conditional-compile-remove(gallery-layouts) */
   OverflowGalleryTop: <WindowHeaderHorizontal20Regular />,
-  /* @conditional-compile-remove(gallery-layouts) */
   SpeakerGalleryLayout: <PersonSquare20Regular />,
-  /* @conditional-compile-remove(gallery-layouts) */
   DefaultGalleryLayout: <TableSimple20Regular />,
-  /* @conditional-compile-remove(gallery-layouts) */
   FloatingLocalVideoGalleryLayout: <BoardSplit20Regular />,
-  /* @conditional-compile-remove(gallery-layouts) */
   FocusedContentGalleryLayout: <ContentView20Regular />,
-  /* @conditional-compile-remove(gallery-layouts) */
   LargeGalleryLayout: <Table20Regular />,
-  /* @conditional-compile-remove(control-bar-button-injection) */
-  DefaultCustomButton: <Circle20Regular />
+  DefaultCustomButton: <Circle20Regular />,
+  DtmfDialpadButton: <Dialpad20Regular />,
+  PhoneNumberButton: <PersonCall20Regular />,
+  JoinByPhoneDialStepIcon: <PersonCall20Regular />,
+  JoinByPhoneConferenceIdIcon: <Dialpad20Regular />,
+  JoinByPhoneWaitToBeAdmittedIcon: <Clock20Filled />,
+  PeoplePaneMoreButton: <MoreHorizontal20Filled />,
+  StopAllSpotlightMenuButton: <VideoPersonStarOff20Filled />,
+  /* @conditional-compile-remove(together-mode) */
+  TogetherModeLayout: <PeopleAudience20Regular />
 };
 
 /**
@@ -151,7 +146,7 @@ export type ChatCompositeIcons = {
   ParticipantItemOptionsHovered?: JSX.Element;
   SendBoxSend?: JSX.Element;
   SendBoxSendHovered?: JSX.Element;
-  /* @conditional-compile-remove(file-sharing) */
+  /* @conditional-compile-remove(file-sharing-acs) */
   SendBoxAttachFile?: JSX.Element;
 };
 
@@ -182,20 +177,16 @@ export type CallCompositeIcons = {
   ControlButtonParticipants?: JSX.Element;
   ControlButtonScreenShareStart?: JSX.Element;
   ControlButtonScreenShareStop?: JSX.Element;
-  /* @conditional-compile-remove(capabilities) */
   ControlButtonCameraProhibited?: JSX.Element;
-  /* @conditional-compile-remove(capabilities) */
+  ControlButtonCameraProhibitedSmall?: JSX.Element;
   ControlButtonMicProhibited?: JSX.Element;
-  /* @conditional-compile-remove(raise-hand) */
+  ControlButtonMicProhibitedSmall?: JSX.Element;
   ControlButtonRaiseHand?: JSX.Element;
-  /* @conditional-compile-remove(raise-hand) */
   ControlButtonLowerHand?: JSX.Element;
-  /* @conditional-compile-remove(raise-hand) */
+  ControlButtonExitSpotlight?: JSX.Element;
   RaiseHandContextualMenuItem?: JSX.Element;
-  /* @conditional-compile-remove(reaction) */
   ReactionContextualMenuItem?: JSX.Element;
   LowerHandContextualMenuItem?: JSX.Element;
-  /* @conditional-compile-remove(reaction) */
   ReactionButtonIcon?: JSX.Element;
   ErrorBarCallCameraAccessDenied?: JSX.Element;
   ErrorBarCallCameraAlreadyInUse?: JSX.Element;
@@ -223,13 +214,9 @@ export type CallCompositeIcons = {
   NoticePageJoinCallFailedDueToNoNetwork?: JSX.Element;
   NoticePageLeftCall?: JSX.Element;
   NoticePageRemovedFromCall?: JSX.Element;
-  /* @conditional-compile-remove(calling-sounds) */
   NoticePageCallRejected?: JSX.Element;
-  /* @conditional-compile-remove(rooms) */
   NoticePageNotInvitedToRoom?: JSX.Element;
-  /* @conditional-compile-remove(rooms) */
   NoticePageRoomNotFound?: JSX.Element;
-  /* @conditional-compile-remove(rooms) */
   NoticePageRoomNotValid?: JSX.Element;
   NoticePageCallTimeout?: JSX.Element;
   OptionsCamera?: JSX.Element;
@@ -241,34 +228,31 @@ export type CallCompositeIcons = {
   ParticipantItemScreenShareStart?: JSX.Element;
   VideoTileMicOff?: JSX.Element;
   LocalCameraSwitch?: JSX.Element;
-  /* @conditional-compile-remove(PSTN-calls) */
   PeoplePaneAddPerson?: JSX.Element;
-  /* @conditional-compile-remove(PSTN-calls) */
   PeoplePaneOpenDialpad?: JSX.Element;
-  /* @conditional-compile-remove(PSTN-calls) */
   DialpadStartCall?: JSX.Element;
-  /* @conditional-compile-remove(rooms) */
   NoticePageInviteToRoomRemoved?: JSX.Element;
-  /* @conditional-compile-remove(video-background-effects) */
+
   BlurVideoBackground?: JSX.Element;
-  /* @conditional-compile-remove(video-background-effects) */
+
   RemoveVideoBackgroundEffect?: JSX.Element;
-  /* @conditional-compile-remove(gallery-layouts) */
   GalleryOptions?: JSX.Element;
-  /* @conditional-compile-remove(gallery-layouts) */
   SpeakerGalleryLayout?: JSX.Element;
-  /* @conditional-compile-remove(gallery-layouts) */
   FloatingLocalVideoGalleryLayout?: JSX.Element;
-  /* @conditional-compile-remove(gallery-layouts) */
   DefaultGalleryLayout?: JSX.Element;
-  /* @conditional-compile-remove(gallery-layouts) */
   FocusedContentGalleryLayout?: JSX.Element;
-  /* @conditional-compile-remove(gallery-layouts) */
   OverflowGalleryTop?: JSX.Element;
-  /* @conditional-compile-remove(gallery-layouts) */
   LargeGalleryLayout?: JSX.Element;
-  /* @conditional-compile-remove(control-bar-button-injection) */
   DefaultCustomButton?: JSX.Element;
+  DtmfDialpadButton?: JSX.Element;
+  PhoneNumberButton?: JSX.Element;
+  JoinByPhoneDialStepIcon?: JSX.Element;
+  JoinByPhoneConferenceIdIcon?: JSX.Element;
+  JoinByPhoneWaitToBeAdmittedIcon?: JSX.Element;
+  PeoplePaneMoreButton?: JSX.Element;
+  StopAllSpotlightMenuButton?: JSX.Element;
+  /* @conditional-compile-remove(together-mode) */
+  TogetherModeLayout?: JSX.Element;
 };
 
 /**
@@ -309,10 +293,10 @@ export type CallWithChatCompositeIcons = {
   ControlButtonOptions?: JSX.Element;
   ControlButtonScreenShareStart?: JSX.Element;
   ControlButtonScreenShareStop?: JSX.Element;
-  /* @conditional-compile-remove(capabilities) */
   ControlButtonCameraProhibited?: JSX.Element;
-  /* @conditional-compile-remove(capabilities) */
+  ControlButtonCameraProhibitedSmall?: JSX.Element;
   ControlButtonMicProhibited?: JSX.Element;
+  ControlButtonMicProhibitedSmall?: JSX.Element;
   ErrorBarCallCameraAccessDenied?: JSX.Element;
   ErrorBarCallCameraAlreadyInUse?: JSX.Element;
   ErrorBarCallLocalVideoFreeze?: JSX.Element;
@@ -346,14 +330,11 @@ export type CallWithChatCompositeIcons = {
   ParticipantItemScreenShareStart?: JSX.Element;
   VideoTileMicOff?: JSX.Element;
   LocalCameraSwitch?: JSX.Element;
-  /* @conditional-compile-remove(PSTN-calls) */
   PeoplePaneAddPerson?: JSX.Element;
-  /* @conditional-compile-remove(PSTN-calls) */
   PeoplePaneOpenDialpad?: JSX.Element;
-  /* @conditional-compile-remove(PSTN-calls) */
   DialpadStartCall?: JSX.Element;
-  /* @conditional-compile-remove(control-bar-button-injection) */
   DefaultCustomButton?: JSX.Element;
+  DtmfDialpadButton?: JSX.Element;
 
   // Chat icons
   EditBoxCancel?: JSX.Element;
@@ -371,6 +352,8 @@ export type CallWithChatCompositeIcons = {
   // Icons common to Call and Chat.
   ParticipantItemOptions?: JSX.Element;
   ParticipantItemOptionsHovered?: JSX.Element;
+  PeoplePaneMoreButton?: JSX.Element;
+  StopAllSpotlightMenuButton?: JSX.Element;
 };
 
 /**

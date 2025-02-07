@@ -24,6 +24,10 @@ import { chatStatefulLogger } from './Logger';
  */
 export interface StatefulChatClient extends ChatClient {
   /**
+   * Cleans up the resource cache from the chat thread client.
+   */
+  dispose(): void;
+  /**
    * Holds all the state that we could proxy from ChatClient {@Link @azure/communication-chat#ChatClient} as
    * ChatClientState {@Link ChatClientState}.
    */
@@ -40,6 +44,22 @@ export interface StatefulChatClient extends ChatClient {
    * @param handler - Original callback to be unsubscribed.
    */
   offStateChange(handler: (state: ChatClientState) => void): void;
+  /**
+   * Downloads a resource for specific message and caches it.
+   *
+   * @param threadId - The thread id of the chat thread.
+   * @param messageId - The message id of the chat message.
+   * @param resourceUrl - The resource url to fetch and cache.
+   */
+  downloadResourceToCache(threadId: string, messageId: string, resourceUrl: string): void;
+  /**
+   * Removes a resource from cache for a specific message.
+   *
+   * @param threadId - The thread id of the chat thread.
+   * @param messageId - The message id of the chat message.
+   * @param resourceUrl - The resource url to remove from cache.
+   */
+  removeResourceFromCache(threadId: string, messageId: string, resourceUrl: string): void;
 }
 
 interface StatefulChatClientWithPrivateProps extends StatefulChatClient {
@@ -99,8 +119,7 @@ const proxyChatClient: ProxyHandler<ChatClient> = {
             receiver.eventSubscriber = new EventSubscriber(chatClient, context);
           }
           return ret;
-        },
-        'ChatClient.startRealtimeNotifications');
+        }, 'ChatClient.startRealtimeNotifications');
       }
       case 'stopRealtimeNotifications': {
         return context.withAsyncErrorTeedToState(async function (
@@ -112,8 +131,7 @@ const proxyChatClient: ProxyHandler<ChatClient> = {
             receiver.eventSubscriber = undefined;
           }
           return ret;
-        },
-        'ChatClient.stopRealtimeNotifications');
+        }, 'ChatClient.stopRealtimeNotifications');
       }
       default:
         return Reflect.get(chatClient, prop);
@@ -214,7 +232,8 @@ export const _createStatefulChatClientWithDeps = (
   args: StatefulChatClientArgs,
   options?: StatefulChatClientOptions
 ): StatefulChatClient => {
-  const context = new ChatContext(options?.maxStateChangeListeners);
+  const context = new ChatContext(options?.maxStateChangeListeners, args.credential, args.endpoint);
+
   let eventSubscriber: EventSubscriber;
 
   context.updateChatConfig(getIdentifierKind(args.userId), args.displayName);
@@ -233,7 +252,20 @@ export const _createStatefulChatClientWithDeps = (
       eventSubscriber = val;
     }
   });
-
+  Object.defineProperty(proxy, 'dispose', {
+    configurable: false,
+    value: () => context?.dispose()
+  });
+  Object.defineProperty(proxy, 'downloadResourceToCache', {
+    configurable: false,
+    value: (threadId: string, messageId: string, resourceUrl: string) =>
+      context?.downloadResourceToCache(threadId, messageId, resourceUrl)
+  });
+  Object.defineProperty(proxy, 'removeResourceFromCache', {
+    configurable: false,
+    value: (threadId: string, messageId: string, resourceUrl: string) =>
+      context?.removeResourceFromCache(threadId, messageId, resourceUrl)
+  });
   Object.defineProperty(proxy, 'getState', {
     configurable: false,
     value: () => context?.getState()

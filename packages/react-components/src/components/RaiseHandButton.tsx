@@ -1,18 +1,12 @@
 // Copyright (c) Microsoft Corporation.
 // Licensed under the MIT License.
 
-/* @conditional-compile-remove(raise-hand) */
 import React from 'react';
-/* @conditional-compile-remove(raise-hand) */
 import { useLocale } from '../localization';
-/* @conditional-compile-remove(raise-hand) */
 import { ControlBarButton, ControlBarButtonProps } from './ControlBarButton';
-/* @conditional-compile-remove(raise-hand) */
-import { DefaultPalette, IButtonStyles, mergeStyles, Theme, useTheme } from '@fluentui/react';
-/* @conditional-compile-remove(raise-hand) */
+import { concatStyleSets, DefaultPalette, IButtonStyles, Theme, useTheme } from '@fluentui/react';
 import { _HighContrastAwareIcon } from './HighContrastAwareIcon';
 
-/* @conditional-compile-remove(raise-hand) */
 /**
  * Strings of {@link RaiseHandButton} that can be overridden.
  *
@@ -31,7 +25,6 @@ export interface RaiseHandButtonStrings {
   tooltipOffContent?: string;
 }
 
-/* @conditional-compile-remove(raise-hand) */
 /**
  * Props for {@link RaiseHandButton}.
  *
@@ -50,7 +43,6 @@ export interface RaiseHandButtonProps extends ControlBarButtonProps {
   strings?: Partial<RaiseHandButtonStrings>;
 }
 
-/* @conditional-compile-remove(raise-hand) */
 /**
  * A button to start / stop screen sharing.
  *
@@ -75,18 +67,19 @@ export const RaiseHandButton = (props: RaiseHandButtonProps): JSX.Element => {
   return (
     <ControlBarButton
       {...props}
-      className={mergeStyles(styles, props.styles)}
+      styles={concatStyleSets(styles, props.styles)}
       onClick={props.onToggleRaiseHand ?? props.onClick}
       onRenderOnIcon={props.onRenderOnIcon ?? onRenderLowerHandIcon}
       onRenderOffIcon={props.onRenderOffIcon ?? onRenderRaiseHandIcon}
       strings={strings}
       labelKey={props.labelKey ?? 'raiseHandButtonLabel'}
+      aria-label={props.checked ? strings.onLabel : strings.offLabel}
+      aria-description={props.checked ? strings.tooltipOnContent : strings.tooltipOffContent}
       disabled={props.disabled}
     />
   );
 };
 
-/* @conditional-compile-remove(raise-hand) */
 const raiseHandButtonStyles = (theme: Theme): IButtonStyles => ({
   rootChecked: {
     background: theme.palette.themePrimary,

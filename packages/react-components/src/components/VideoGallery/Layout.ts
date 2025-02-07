@@ -3,7 +3,6 @@
 
 import { VideoGalleryParticipant, VideoGalleryRemoteParticipant } from '../../types';
 import { VideoGalleryStyles } from '../VideoGallery';
-/* @conditional-compile-remove(vertical-gallery) */
 import { OverflowGalleryPosition } from '../VideoGallery';
 
 /**
@@ -45,10 +44,19 @@ export interface LayoutProps {
    * List of pinned participant userIds
    */
   pinnedParticipantUserIds?: string[];
-  /* @conditional-compile-remove(vertical-gallery) */
   /**
    * Determines the layout of the overflowGallery.
    * @defaultValue 'horizontalBottom'
    */
   overflowGalleryPosition?: OverflowGalleryPosition;
+  /**
+   * List of spotlighted participant userIds
+   */
+  spotlightedParticipantUserIds?: string[];
+  /* @conditional-compile-remove(together-mode) */
+  /**
+   * Props for a layout component
+   *
+   */
+  togetherModeStreamComponent?: JSX.Element;
 }

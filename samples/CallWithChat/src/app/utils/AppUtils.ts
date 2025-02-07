@@ -2,6 +2,7 @@
 // Licensed under the MIT License.
 
 import { GroupCallLocator, GroupLocator, TeamsMeetingLinkLocator } from '@azure/communication-calling';
+import { TeamsMeetingIdLocator } from '@azure/communication-calling';
 import { v1 as generateGUID } from 'uuid';
 import { getExistingThreadIdFromURL } from './getThreadId';
 import { pushQSPUrl } from './pushQSPUrl';
@@ -11,7 +12,7 @@ import { pushQSPUrl } from './pushQSPUrl';
  */
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 export const fetchTokenResponse = async (): Promise<any> => {
-  const response = await fetch('/token');
+  const response = await fetch('token');
   if (response.ok) {
     const responseAsJson = await response.json();
     const token = responseAsJson.token;
@@ -48,6 +49,27 @@ export const ensureJoinableTeamsLinkPushedToUrl = (teamsLink: TeamsMeetingLinkLo
   }
 };
 
+/**
+ * Get teams meeting id and passcode from the url's query params.
+ */
+export const getMeetingIdFromUrl = (): TeamsMeetingIdLocator | undefined => {
+  const urlParams = new URLSearchParams(window.location.search);
+  const meetingId = urlParams.get('meetingId');
+  const passcode = urlParams.get('passcode');
+  return meetingId
+    ? { meetingId: decodeURIComponent(meetingId), passcode: passcode ? passcode : undefined }
+    : undefined;
+};
+
+export const ensureJoinableMeetingIdPushedToUrl = (teamsLink: TeamsMeetingIdLocator): void => {
+  if (!getTeamsLinkFromUrl()) {
+    pushQSPUrl({ name: 'meetingId', value: encodeURIComponent(teamsLink.meetingId) });
+    if (teamsLink.passcode) {
+      pushQSPUrl({ name: 'passcode', value: teamsLink.passcode });
+    }
+  }
+};
+
 export const ensureJoinableCallLocatorPushedToUrl = (callLocator: GroupCallLocator): void => {
   if (!getGroupIdFromUrl()) {
     pushQSPUrl({ name: 'groupId', value: callLocator.groupId });
@@ -74,7 +96,7 @@ export const isOnIphoneAndNotSafari = (): boolean => {
 export const isSmallScreen = (): boolean => window.innerWidth < 700 || window.innerHeight < 400;
 
 export const navigateToHomePage = (): void => {
-  window.location.href = window.location.href.split('?')[0];
+  window.location.href = window.location.href.split('?')[0] ?? window.location.href;
 };
 
 declare let __BUILDTIME__: string; // Injected by webpack
@@ -88,3 +110,6 @@ export const chatSDKVersion = __CHATVERSION__;
 
 declare let __COMMUNICATIONREACTVERSION__: string; //Injected by webpack
 export const communicationReactSDKVersion = __COMMUNICATIONREACTVERSION__;
+
+declare let __COMMITID__: string; //Injected by webpack
+export const commitID = __COMMITID__;

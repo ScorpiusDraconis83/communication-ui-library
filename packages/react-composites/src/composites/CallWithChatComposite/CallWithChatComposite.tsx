@@ -3,21 +3,23 @@
 
 import React, { useCallback, useState, useMemo, useEffect, useRef } from 'react';
 import { mergeStyles, PartialTheme, Stack, Theme } from '@fluentui/react';
+/* @conditional-compile-remove(breakout-rooms) */
+import { Spinner, SpinnerSize } from '@fluentui/react';
 import { CallCompositePage } from '../CallComposite';
-/* @conditional-compile-remove(end-of-call-survey) */
 import { CallSurvey } from '@azure/communication-calling';
 import { CallState } from '@azure/communication-calling';
 import { callCompositeContainerStyles, compositeOuterContainerStyles } from './styles/CallWithChatCompositeStyles';
+/* @conditional-compile-remove(breakout-rooms) */
+import { chatSpinnerContainerStyles } from './styles/CallWithChatCompositeStyles';
 import { CallWithChatAdapter } from './adapter/CallWithChatAdapter';
 import { CallWithChatBackedCallAdapter } from './adapter/CallWithChatBackedCallAdapter';
 import { CallWithChatBackedChatAdapter } from './adapter/CallWithChatBackedChatAdapter';
 import { CallAdapter } from '../CallComposite';
-import { ChatComposite, ChatAdapter } from '../ChatComposite';
+import { ChatComposite, ChatAdapter, ChatCompositeOptions } from '../ChatComposite';
 import { BaseProvider, BaseCompositeProps } from '../common/BaseComposite';
 import { CallWithChatCompositeIcons } from '../common/icons';
 import { AvatarPersonaDataCallback } from '../common/AvatarPersona';
 import { CallWithChatAdapterState } from './state/CallWithChatAdapterState';
-/* @conditional-compile-remove(end-of-call-survey) */
 import { CallSurveyImprovementSuggestions } from '@internal/react-components';
 import {
   ParticipantMenuItemsCallback,
@@ -26,14 +28,10 @@ import {
   useTheme
 } from '@internal/react-components';
 import { useId } from '@fluentui/react-hooks';
-/* @conditional-compile-remove(file-sharing) */
-import { FileSharingOptions } from '../ChatComposite';
 import { containerDivStyles } from '../common/ContainerRectProps';
 import { useCallWithChatCompositeStrings } from './hooks/useCallWithChatCompositeStrings';
 import { CallCompositeInner, CallCompositeOptions } from '../CallComposite/CallComposite';
-/* @conditional-compile-remove(pinned-participants) */
 import { RemoteVideoTileMenuOptions } from '../CallComposite/CallComposite';
-/* @conditional-compile-remove(click-to-call) */
 import { LocalVideoTileOptions } from '../CallComposite/CallComposite';
 /* @conditional-compile-remove(call-readiness) */
 import { DeviceCheckOptions } from '../CallComposite/CallComposite';
@@ -49,8 +47,11 @@ import {
 import { SidePaneHeader } from '../common/SidePaneHeader';
 import { CallControlOptions } from '../CallComposite/types/CallControlOptions';
 import { useUnreadMessagesTracker } from './ChatButton/useUnreadMessagesTracker';
-/* @conditional-compile-remove(gallery-layouts) */
 import { VideoGalleryLayout } from '@internal/react-components';
+/* @conditional-compile-remove(file-sharing-acs) */
+import { AttachmentOptions } from '@internal/react-components';
+/* @conditional-compile-remove(breakout-rooms) */
+import { useLocale } from '../localization';
 
 /**
  * Props required for the {@link CallWithChatComposite}
@@ -91,7 +92,7 @@ export interface CallWithChatControlOptions extends CommonCallControlOptions {
    * Show or hide the chat button in the call-with-chat composite control bar.
    * @defaultValue true
    */
-  chatButton?: boolean | /* @conditional-compile-remove(PSTN-calls) */ { disabled: boolean };
+  chatButton?: boolean | { disabled: boolean };
 }
 
 /**
@@ -105,13 +106,13 @@ export type CallWithChatCompositeOptions = {
    * If using the boolean values, true will cause default behavior across the whole control bar. False hides the whole control bar.
    */
   callControls?: boolean | CallWithChatControlOptions;
-  /* @conditional-compile-remove(file-sharing) */
+  /* @conditional-compile-remove(file-sharing-acs) */
   /**
    * Properties for configuring the File Sharing feature.
    * If undefined, file sharing feature will be disabled.
    * @beta
    */
-  fileSharing?: FileSharingOptions;
+  attachmentOptions?: AttachmentOptions;
   /* @conditional-compile-remove(call-readiness) */
   /**
    * Device permissions check options for your call.
@@ -166,19 +167,16 @@ export type CallWithChatCompositeOptions = {
    * if this is not supplied, the composite will not show a unsupported browser page.
    */
   onEnvironmentInfoTroubleshootingClick?: () => void;
-  /* @conditional-compile-remove(pinned-participants) */
   /**
    * Remote participant video tile menu options
    */
   remoteVideoTileMenuOptions?: RemoteVideoTileMenuOptions;
-  /* @conditional-compile-remove(click-to-call) */
   /**
    * Options for controlling the local video tile.
    *
    * @remarks if 'false' the local video tile will not be rendered.
    */
   localVideoTile?: boolean | LocalVideoTileOptions;
-  /* @conditional-compile-remove(gallery-layouts) */
   /**
    * Options for controlling the starting layout of the composite's video gallery
    */
@@ -188,7 +186,6 @@ export type CallWithChatCompositeOptions = {
      */
     layout?: VideoGalleryLayout;
   };
-  /* @conditional-compile-remove(end-of-call-survey) */
   /**
    * Options for end of call survey
    */
@@ -198,11 +195,11 @@ export type CallWithChatCompositeOptions = {
      * @defaultValue false
      */
     disableSurvey?: boolean;
-    /* @conditional-compile-remove(end-of-call-survey-self-host) */
     /**
-     * Optional callback to add extra logic when survey is dismissed. For self-host only
+     * Optional callback to redirect users to custom screens when survey is done, note that default end call screen will be shown if this callback is not provided
+     * This callback can be used to redirect users to different screens depending on survey state, whether it is submitted, skipped or has a problem when submitting the survey
      */
-    onSurveyDismissed?: () => void;
+    onSurveyClosed?: (surveyState: 'sent' | 'skipped' | 'error', surveyError?: string) => void;
     /**
      * Optional callback to handle survey data including free form text response
      * Note that free form text response survey option is only going to be enabled when this callback is provided
@@ -226,7 +223,6 @@ export type CallWithChatCompositeOptions = {
       improvementSuggestions: CallSurveyImprovementSuggestions
     ) => Promise<void>;
   };
-  /* @conditional-compile-remove(custom-branding) */
   /**
    * Options for setting additional customizations related to personalized branding.
    */
@@ -253,7 +249,6 @@ export type CallWithChatCompositeOptions = {
        */
       shape?: 'unset' | 'circle';
     };
-    /* @conditional-compile-remove(custom-branding) */
     /**
      * Background image displayed on the configuration page.
      */
@@ -267,6 +262,25 @@ export type CallWithChatCompositeOptions = {
       url: string;
     };
   };
+  /**
+   * Options for settings related to spotlight.
+   */
+  spotlight?: {
+    /**
+     * Flag to hide the menu buttons to start and stop spotlight for remote participants and the local participant.
+     * @defaultValue false
+     */
+    hideSpotlightButtons?: boolean;
+  };
+
+  /* @conditional-compile-remove(rich-text-editor-composite-support) */
+  /**
+   * Enables rich text editor for the send and edit boxes
+   * @defaultValue `false`
+   *
+   * @beta
+   */
+  richTextEditor?: boolean;
 };
 
 type CallWithChatScreenProps = {
@@ -277,8 +291,8 @@ type CallWithChatScreenProps = {
   callControls?: boolean | CallWithChatControlOptions;
   onFetchAvatarPersonaData?: AvatarPersonaDataCallback;
   onFetchParticipantMenuItems?: ParticipantMenuItemsCallback;
-  /* @conditional-compile-remove(file-sharing) */
-  fileSharing?: FileSharingOptions;
+  /* @conditional-compile-remove(file-sharing-acs) */
+  attachmentOptions?: AttachmentOptions;
   rtl?: boolean;
   /* @conditional-compile-remove(call-readiness) */
   deviceChecks?: DeviceCheckOptions;
@@ -291,15 +305,11 @@ type CallWithChatScreenProps = {
   onNetworkingTroubleShootingClick?: () => void;
   /* @conditional-compile-remove(unsupported-browser) */
   onEnvironmentInfoTroubleshootingClick?: () => void;
-  /* @conditional-compile-remove(pinned-participants) */
   remoteVideoTileMenuOptions?: RemoteVideoTileMenuOptions;
-  /* @conditional-compile-remove(click-to-call) */
   localVideoTile?: boolean | LocalVideoTileOptions;
-  /* @conditional-compile-remove(gallery-layouts) */
   galleryOptions?: {
     layout?: VideoGalleryLayout;
   };
-  /* @conditional-compile-remove(end-of-call-survey) */
   /**
    * Options for end of call survey
    */
@@ -309,11 +319,11 @@ type CallWithChatScreenProps = {
      * @defaultValue false
      */
     disableSurvey?: boolean;
-    /* @conditional-compile-remove(end-of-call-survey-self-host) */
     /**
-     * Optional callback to add extra logic when survey is dismissed. For self-host only
+     * Optional callback to redirect users to custom screens when survey is done, note that default end call screen will be shown if this callback is not provided
+     * This callback can be used to redirect users to different screens depending on survey state, whether it is submitted, skipped or has a problem when submitting the survey
      */
-    onSurveyDismissed?: () => void;
+    onSurveyClosed?: (surveyState: 'sent' | 'skipped' | 'error', surveyError?: string) => void;
     /**
      * Optional callback to handle survey data including free form text response
      * Note that free form text response survey option is only going to be enabled when this callback is provided
@@ -337,21 +347,23 @@ type CallWithChatScreenProps = {
       improvementSuggestions: CallSurveyImprovementSuggestions
     ) => Promise<void>;
   };
-  /* @conditional-compile-remove(custom-branding) */
   logo?: {
     url: string;
     alt?: string;
     shape?: 'unset' | 'circle';
   };
-  /* @conditional-compile-remove(custom-branding) */
   backgroundImage?: {
     url: string;
   };
+  spotlight?: {
+    hideSpotlightButtons?: boolean;
+  };
+  /* @conditional-compile-remove(rich-text-editor-composite-support) */
+  richTextEditor?: boolean;
 };
 
 const CallWithChatScreen = (props: CallWithChatScreenProps): JSX.Element => {
   const { callWithChatAdapter, fluentTheme, formFactor = 'desktop' } = props;
-  /* @conditional-compile-remove(end-of-call-survey) */
   const { surveyOptions } = props;
   const mobileView = formFactor === 'mobile';
 
@@ -365,6 +377,7 @@ const CallWithChatScreen = (props: CallWithChatScreenProps): JSX.Element => {
   );
 
   const [currentCallState, setCurrentCallState] = useState<CallState>();
+  const [isChatInitialized, setIsChatInitialized] = useState(false);
   const [currentPage, setCurrentPage] = useState<CallCompositePage>();
   const [isChatOpen, setIsChatOpen] = useState(false);
 
@@ -374,6 +387,7 @@ const CallWithChatScreen = (props: CallWithChatScreenProps): JSX.Element => {
     const updateCallWithChatPage = (newState: CallWithChatAdapterState): void => {
       setCurrentPage(newState.page);
       setCurrentCallState(newState.call?.state);
+      setIsChatInitialized(newState.chat ? true : false);
     };
     updateCallWithChatPage(callWithChatAdapter.getState());
     callWithChatAdapter.onStateChange(updateCallWithChatPage);
@@ -409,7 +423,7 @@ const CallWithChatScreen = (props: CallWithChatScreenProps): JSX.Element => {
     }, 300);
   }, [compositeParentDivId]);
 
-  const isOnHold = isOnHoldTrampoline(currentPage);
+  const isOnHold = currentPage === 'hold';
   useEffect(() => {
     if (isOnHold) {
       closeChat();
@@ -450,7 +464,7 @@ const CallWithChatScreen = (props: CallWithChatScreenProps): JSX.Element => {
     [chatButtonDisabled, mobileView, toggleChat, showChatButton]
   );
 
-  const unreadChatMessagesCount = useUnreadMessagesTracker(chatAdapter, isChatOpen);
+  const unreadChatMessagesCount = useUnreadMessagesTracker(chatAdapter, isChatOpen, isChatInitialized);
 
   const customChatButton: CustomCallControlButtonCallback = useCallback(
     (args: CustomCallControlButtonCallbackArgs) => ({
@@ -492,9 +506,7 @@ const CallWithChatScreen = (props: CallWithChatScreenProps): JSX.Element => {
   );
 
   const injectedCustomButtonsFromProps = useMemo(() => {
-    /* @conditional-compile-remove(control-bar-button-injection) */
     return [...(callControlOptionsFromProps.onFetchCustomButtonProps ?? [])];
-    return [];
   }, [callControlOptionsFromProps]);
 
   const callCompositeOptions: CallCompositeOptions = useMemo(
@@ -506,7 +518,6 @@ const CallWithChatScreen = (props: CallWithChatScreenProps): JSX.Element => {
               ...callControlOptionsFromProps,
               onFetchCustomButtonProps: [
                 ...(showChatButton ? [customChatButton] : []),
-                /* @conditional-compile-remove(control-bar-button-injection) */
                 ...injectedCustomButtonsFromProps
               ],
               legacyControlBarExperience: false
@@ -519,19 +530,16 @@ const CallWithChatScreen = (props: CallWithChatScreenProps): JSX.Element => {
       onPermissionsTroubleshootingClick: props.onPermissionsTroubleshootingClick,
       /* @conditional-compile-remove(unsupported-browser) */
       onEnvironmentInfoTroubleshootingClick: props.onEnvironmentInfoTroubleshootingClick,
-      /* @conditional-compile-remove(pinned-participants) */
       remoteVideoTileMenuOptions: props.remoteVideoTileMenuOptions,
-      /* @conditional-compile-remove(gallery-layouts) */
+
       galleryOptions: props.galleryOptions,
-      /* @conditional-compile-remove(click-to-call) */
       localVideoTile: props.localVideoTile,
-      /* @conditional-compile-remove(end-of-call-survey) */
       surveyOptions: surveyOptions,
-      /* @conditional-compile-remove(custom-branding) */
       branding: {
         logo: props.logo,
         backgroundImage: props.backgroundImage
-      }
+      },
+      spotlight: props.spotlight
     }),
     [
       props.callControls,
@@ -547,54 +555,82 @@ const CallWithChatScreen = (props: CallWithChatScreenProps): JSX.Element => {
       props.onNetworkingTroubleShootingClick,
       /* @conditional-compile-remove(call-readiness) */
       props.onPermissionsTroubleshootingClick,
-      /* @conditional-compile-remove(gallery-layouts) */
       props.galleryOptions,
-      /* @conditional-compile-remove(click-to-call) */
       props.localVideoTile,
-      /* @conditional-compile-remove(pinned-participants) */
       props.remoteVideoTileMenuOptions,
-      /* @conditional-compile-remove(end-of-call-survey) */
       surveyOptions,
-      /* @conditional-compile-remove(custom-branding) */
       props.logo,
-      /* @conditional-compile-remove(custom-branding) */
-      props.backgroundImage
+      props.backgroundImage,
+      props.spotlight
     ]
   );
 
-  const onRenderChatContent = useCallback(
-    (): JSX.Element => (
+  const chatCompositeOptions: ChatCompositeOptions = useMemo(
+    () => ({
+      topic: false,
+      /* @conditional-compile-remove(chat-composite-participant-pane) */
+      participantPane: false,
+      /* @conditional-compile-remove(file-sharing-acs) */
+      attachmentOptions: props.attachmentOptions,
+      /* @conditional-compile-remove(rich-text-editor-composite-support) */
+      richTextEditor: props.richTextEditor
+    }),
+    [
+      /* @conditional-compile-remove(file-sharing-acs) */
+      props.attachmentOptions,
+      /* @conditional-compile-remove(rich-text-editor-composite-support) */
+      props.richTextEditor
+    ]
+  );
+
+  /* @conditional-compile-remove(breakout-rooms) */
+  const chatSpinnerLabel = useLocale().strings.callWithChat.chatContentSpinnerLabel;
+
+  const onRenderChatContent = useCallback((): JSX.Element => {
+    /* @conditional-compile-remove(breakout-rooms) */
+    if (!isChatInitialized) {
+      return (
+        <Stack styles={chatSpinnerContainerStyles}>
+          <Spinner label={chatSpinnerLabel} size={SpinnerSize.large} />
+        </Stack>
+      );
+    }
+    return (
       <ChatComposite
         adapter={chatAdapter}
         fluentTheme={theme}
-        options={{
-          topic: false,
-          /* @conditional-compile-remove(chat-composite-participant-pane) */
-          participantPane: false,
-          /* @conditional-compile-remove(file-sharing) */
-          fileSharing: props.fileSharing
-        }}
+        options={chatCompositeOptions}
         onFetchAvatarPersonaData={props.onFetchAvatarPersonaData}
       />
-    ),
-    [
-      chatAdapter,
-      /* @conditional-compile-remove(file-sharing) */ props.fileSharing,
-      props.onFetchAvatarPersonaData,
-      theme
-    ]
-  );
+    );
+  }, [
+    chatAdapter,
+    props.onFetchAvatarPersonaData,
+    chatCompositeOptions,
+    theme,
+    /* @conditional-compile-remove(breakout-rooms) */ isChatInitialized,
+    /* @conditional-compile-remove(breakout-rooms) */ chatSpinnerLabel
+  ]);
+
+  let chatPaneTitle = callWithChatStrings.chatPaneTitle;
+  /* @conditional-compile-remove(breakout-rooms) */
+  // If breakout room settings are defined then we know we are in a breakout room so we should
+  // use the breakout room chat pane title.
+  if (callAdapter.getState().call?.breakoutRooms?.breakoutRoomSettings) {
+    chatPaneTitle = callWithChatStrings.breakoutRoomChatPaneTitle;
+  }
 
   const sidePaneHeaderRenderer = useCallback(
     () => (
       <SidePaneHeader
-        headingText={callWithChatStrings.chatPaneTitle}
+        headingText={chatPaneTitle}
         onClose={closeChat}
         dismissSidePaneButtonAriaLabel={callWithChatStrings.dismissSidePaneButtonLabel ?? ''}
         mobileView={mobileView}
+        chatButtonPresent={showChatButton}
       />
     ),
-    [callWithChatStrings.chatPaneTitle, callWithChatStrings.dismissSidePaneButtonLabel, closeChat, mobileView]
+    [chatPaneTitle, closeChat, callWithChatStrings.dismissSidePaneButtonLabel, mobileView, showChatButton]
   );
 
   const sidePaneContentRenderer = useMemo(
@@ -670,7 +706,13 @@ const CallWithChatScreen = (props: CallWithChatScreenProps): JSX.Element => {
 export const CallWithChatComposite = (props: CallWithChatCompositeProps): JSX.Element => {
   const { adapter, fluentTheme, rtl, formFactor, joinInvitationURL, options } = props;
   return (
-    <BaseProvider fluentTheme={fluentTheme} rtl={rtl} locale={props.locale} icons={props.icons}>
+    <BaseProvider
+      fluentTheme={fluentTheme}
+      rtl={rtl}
+      locale={props.locale}
+      icons={props.icons}
+      formFactor={props.formFactor}
+    >
       <CallWithChatScreen
         {...props}
         /* @conditional-compile-remove(call-readiness) */
@@ -680,33 +722,28 @@ export const CallWithChatComposite = (props: CallWithChatCompositeProps): JSX.El
         callControls={options?.callControls}
         joinInvitationURL={joinInvitationURL}
         fluentTheme={fluentTheme}
-        /* @conditional-compile-remove(pinned-participants) */
         remoteVideoTileMenuOptions={options?.remoteVideoTileMenuOptions}
-        /* @conditional-compile-remove(file-sharing) */
-        fileSharing={options?.fileSharing}
-        /* @conditional-compile-remove(click-to-call) */
+        /* @conditional-compile-remove(file-sharing-acs) */
+        attachmentOptions={options?.attachmentOptions}
         localVideoTile={options?.localVideoTile}
-        /* @conditional-compile-remove(gallery-layouts) */
         galleryOptions={options?.galleryOptions}
-        /* @conditional-compile-remove(custom-branding) */
         logo={options?.branding?.logo}
-        /* @conditional-compile-remove(custom-branding) */
         backgroundImage={options?.branding?.backgroundImage}
-        /* @conditional-compile-remove(end-of-call-survey) */
         surveyOptions={options?.surveyOptions}
+        spotlight={options?.spotlight}
+        /* @conditional-compile-remove(rich-text-editor-composite-support) */
+        richTextEditor={options?.richTextEditor}
       />
     </BaseProvider>
   );
 };
 
 const hasJoinedCallFn = (page: CallCompositePage, callStatus: CallState): boolean => {
-  /* @conditional-compile-remove(one-to-n-calling) */ /* @conditional-compile-remove(one-to-n-calling) */
   return (
     (page === 'call' &&
       (callStatus === 'Connected' || callStatus === 'RemoteHold' || callStatus === 'Disconnecting')) ||
     (page === 'hold' && (callStatus === 'LocalHold' || callStatus === 'Disconnecting'))
   );
-  return page === 'call' && (callStatus === 'Connected' || callStatus === 'Disconnecting');
 };
 
 const checkShowChatButton = (callControls?: boolean | CallWithChatControlOptions): boolean => {
@@ -721,10 +758,4 @@ const checkShowChatButton = (callControls?: boolean | CallWithChatControlOptions
 
 const checkChatButtonIsDisabled = (callControls?: boolean | CallWithChatControlOptions): boolean => {
   return typeof callControls === 'object' && isDisabled(callControls?.chatButton);
-};
-
-const isOnHoldTrampoline = (page: CallCompositePage | undefined): boolean => {
-  /* @conditional-compile-remove(PSTN-calls) */ /* @conditional-compile-remove(one-to-n-calling) */
-  return page === 'hold';
-  return false;
 };

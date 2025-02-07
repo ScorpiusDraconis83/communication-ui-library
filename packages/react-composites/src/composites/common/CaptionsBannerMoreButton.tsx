@@ -3,32 +3,23 @@
 
 import React from 'react';
 import { ControlBarButtonProps } from '@internal/react-components';
-/* @conditional-compile-remove(close-captions) */
 import { useCallback } from 'react';
-/* @conditional-compile-remove(close-captions) */
 import { IContextualMenuItem } from '@fluentui/react';
-/* @conditional-compile-remove(close-captions) */
-import { _StartCaptionsButton } from '@internal/react-components';
-/* @conditional-compile-remove(close-captions) */
+import { StartCaptionsButton } from '@internal/react-components';
 import { useMemo } from 'react';
-/* @conditional-compile-remove(close-captions) */
-import { useAdaptedSelector } from '../CallComposite/hooks/useAdaptedSelector';
-/* @conditional-compile-remove(close-captions) */
-import { useHandlers } from '../CallComposite/hooks/useHandlers';
-/* @conditional-compile-remove(close-captions) */
 import { buttonFlyoutIncreasedSizeStyles } from '../CallComposite/styles/Buttons.styles';
-/* @conditional-compile-remove(close-captions) */
 import { useLocale } from '../localization';
-/* @conditional-compile-remove(close-captions) */
 import { MoreButton } from './MoreButton';
-/* @conditional-compile-remove(close-captions) */
-import { _startCaptionsButtonSelector } from '@internal/calling-component-bindings';
-/* @conditional-compile-remove(close-captions) */
 import { _preventDismissOnEvent } from '@internal/acs-ui-common';
+import { FocusableElement } from './types/FocusableElement';
+import { usePropsFor } from '../CallComposite/hooks/usePropsFor';
 
 /** @private */
 export interface CaptionsBannerMoreButtonProps extends ControlBarButtonProps {
   onCaptionsSettingsClick?: () => void;
+
+  /** Element to return focus to when the Captions Banner is closed */
+  returnFocusRef?: React.RefObject<FocusableElement>;
 }
 
 /**
@@ -36,13 +27,8 @@ export interface CaptionsBannerMoreButtonProps extends ControlBarButtonProps {
  * @private
  */
 export const CaptionsBannerMoreButton = (props: CaptionsBannerMoreButtonProps): JSX.Element => {
-  /* @conditional-compile-remove(close-captions) */
   const localeStrings = useLocale();
-  /* @conditional-compile-remove(close-captions) */
-  const startCaptionsButtonProps = useAdaptedSelector(_startCaptionsButtonSelector);
-  /* @conditional-compile-remove(close-captions) */
-  const startCaptionsButtonHandlers = useHandlers(_StartCaptionsButton);
-  /* @conditional-compile-remove(close-captions) */
+  const startCaptionsButtonProps = usePropsFor(StartCaptionsButton);
   const moreButtonStrings = useMemo(
     () => ({
       label: localeStrings.strings.call.captionsBannerMoreButtonCallingLabel,
@@ -51,17 +37,19 @@ export const CaptionsBannerMoreButton = (props: CaptionsBannerMoreButtonProps): 
     [localeStrings]
   );
 
-  /* @conditional-compile-remove(close-captions) */
   const moreButtonContextualMenuItems: IContextualMenuItem[] = [];
 
-  /* @conditional-compile-remove(close-captions) */
   const startCaptions = useCallback(async () => {
-    await startCaptionsButtonHandlers.onStartCaptions({
+    await startCaptionsButtonProps.onStartCaptions({
       spokenLanguage: startCaptionsButtonProps.currentSpokenLanguage
     });
-  }, [startCaptionsButtonHandlers, startCaptionsButtonProps.currentSpokenLanguage]);
+  }, [startCaptionsButtonProps]);
 
-  /* @conditional-compile-remove(close-captions) */
+  const stopCaptions = useCallback(async () => {
+    await startCaptionsButtonProps.onStopCaptions();
+    props.returnFocusRef?.current?.focus();
+  }, [startCaptionsButtonProps, props.returnFocusRef]);
+
   moreButtonContextualMenuItems.push({
     key: 'ToggleCaptionsKey',
     text: startCaptionsButtonProps.checked
@@ -69,10 +57,10 @@ export const CaptionsBannerMoreButton = (props: CaptionsBannerMoreButtonProps): 
       : localeStrings.strings.call.startCaptionsButtonTooltipOffContent,
     onClick: () => {
       startCaptionsButtonProps.checked
-        ? startCaptionsButtonHandlers.onStopCaptions()
+        ? stopCaptions()
         : startCaptionsButtonProps.currentSpokenLanguage !== ''
-        ? startCaptions()
-        : props.onCaptionsSettingsClick && props.onCaptionsSettingsClick();
+          ? startCaptions()
+          : props.onCaptionsSettingsClick && props.onCaptionsSettingsClick();
     },
     iconProps: {
       iconName: startCaptionsButtonProps.checked ? 'CaptionsOffIcon' : 'CaptionsIcon',
@@ -82,7 +70,7 @@ export const CaptionsBannerMoreButton = (props: CaptionsBannerMoreButtonProps): 
       styles: buttonFlyoutIncreasedSizeStyles
     }
   });
-  /* @conditional-compile-remove(close-captions) */
+
   if (props.onCaptionsSettingsClick) {
     moreButtonContextualMenuItems.push({
       key: 'openCaptionsSettingsKey',
@@ -99,7 +87,7 @@ export const CaptionsBannerMoreButton = (props: CaptionsBannerMoreButtonProps): 
       disabled: !startCaptionsButtonProps.checked
     });
   }
-  /* @conditional-compile-remove(close-captions) */
+
   return (
     <MoreButton
       {...props}
@@ -114,5 +102,4 @@ export const CaptionsBannerMoreButton = (props: CaptionsBannerMoreButtonProps): 
       }}
     />
   );
-  return <></>;
 };

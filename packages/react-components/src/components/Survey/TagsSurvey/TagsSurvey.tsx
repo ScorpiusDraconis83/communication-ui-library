@@ -1,9 +1,13 @@
 // Copyright (c) Microsoft Corporation.
 // Licensed under the MIT License.
 
-import React, { useCallback, useMemo, useState } from 'react';
+// Permit `any` in this file to handle the overloaded issue type. Todo: refactor CallSurvey to have PartialDeep<_CallSurvey> instead of any
+// for tracking incomplete survey responses.
+/* eslint-disable @typescript-eslint/no-explicit-any */
+
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { Text, useTheme, Stack, Checkbox, Pivot, PivotItem, TextField } from '@fluentui/react';
-import { _formatString, _pxToRem } from '@internal/acs-ui-common';
+import { _formatString, _getKeys, _pxToRem } from '@internal/acs-ui-common';
 import {
   checkboxClassName,
   questionTextStyle,
@@ -13,6 +17,7 @@ import {
 } from './TagsSurvey.styles';
 import {
   _AudioIssue,
+  _CallRating,
   _CallSurvey,
   _CallSurveyResponse,
   _OverallIssue,
@@ -52,12 +57,13 @@ export type _IssueCategory = 'overallRating' | 'audioRating' | 'videoRating' | '
  *
  * @internal
  */
-export type _SurveyTag = {
-  [issueCategory: string]: {
+export type _SurveyTag = Record<
+  _IssueCategory,
+  {
     message: string;
     issue: _AudioIssue | _OverallIssue | _ScreenshareIssue | _VideoIssue;
-  }[];
-};
+  }[]
+>;
 
 /**
  * Props for {@link TagsSurvey} component.
@@ -85,27 +91,39 @@ export interface _TagsSurveyProps {
 export const _TagsSurvey = (props: _TagsSurveyProps): JSX.Element => {
   const { callIssuesToTag, categoryHeadings, onConfirm, strings, showFreeFormTextField } = props;
 
-  const [selectedTags, setSelectedTags] = useState({});
+  const [selectedTags, setSelectedTags] = useState<_CallSurvey>({});
 
   const [textResponse, setTextResponse] = useState<CallSurveyImprovementSuggestions>({});
 
   const [selectedTextResponse, setSelectedTextResponse] = useState<CallSurveyImprovementSuggestions>({});
 
-  const tags: _SurveyTag[] = useMemo(() => {
-    const tags: _SurveyTag[] = [];
-    Object.keys(callIssuesToTag).forEach((issueCategory) => {
-      Object.keys(callIssuesToTag[issueCategory]).map((issue) => {
-        const issueCapitalized = issue?.charAt(0).toUpperCase() + issue?.slice(1);
+  const [checkedTextFields, setCheckedTextFields] = useState<_IssueCategory[]>([]);
 
+  const tags: _SurveyTag = useMemo(() => {
+    const tags: _SurveyTag = {
+      overallRating: [],
+      audioRating: [],
+      videoRating: [],
+      screenshareRating: []
+    };
+    _getKeys(callIssuesToTag).forEach((issueCategory) => {
+      _getKeys(callIssuesToTag[issueCategory]).map((issue) => {
+        const issueCapitalized = (issue?.charAt(0).toUpperCase() + issue?.slice(1)) as
+          | _AudioIssue
+          | _OverallIssue
+          | _ScreenshareIssue
+          | _VideoIssue;
+
+        const issueMessages = callIssuesToTag[issueCategory];
         if (tags[issueCategory]) {
           tags[issueCategory].push({
-            message: callIssuesToTag[issueCategory][issue],
+            message: issueMessages[issue],
             issue: issueCapitalized
           });
         } else {
           tags[issueCategory] = [
             {
-              message: callIssuesToTag[issueCategory][issue],
+              message: issueMessages[issue],
               issue: issueCapitalized
             }
           ];
@@ -116,18 +134,24 @@ export const _TagsSurvey = (props: _TagsSurveyProps): JSX.Element => {
   }, [callIssuesToTag]);
 
   const onChange = React.useCallback(
-    (issueCategory: string, checked: boolean, issue?: string): void => {
+    (
+      issueCategory: _IssueCategory,
+      checked: boolean,
+      issue?: _AudioIssue | _OverallIssue | _ScreenshareIssue | _VideoIssue
+    ): void => {
       if (checked) {
         if (issue) {
           setSelectedTags((prevState) => {
-            if (prevState[issueCategory]) {
-              prevState[issueCategory].issues.push(issue);
+            const category = prevState?.[issueCategory];
+            if (category && category.issues) {
+              category.issues = [category.issues, issue] as any;
             } else {
-              prevState[issueCategory] = { score: 1, issues: [issue] };
+              prevState[issueCategory] = { issues: [issue] } as any;
             }
             return prevState;
           });
         } else {
+          setCheckedTextFields([...checkedTextFields, issueCategory]);
           setSelectedTextResponse((prevState) => {
             prevState[issueCategory] = textResponse[issueCategory];
             return prevState;
@@ -136,35 +160,36 @@ export const _TagsSurvey = (props: _TagsSurveyProps): JSX.Element => {
       } else {
         if (issue) {
           setSelectedTags((prevState) => {
-            if (prevState[issueCategory]) {
-              prevState[issueCategory].issues = prevState[issueCategory].issues.filter(function (value) {
-                return value !== issue;
-              });
-              if (prevState[issueCategory].issues.length === 0) {
-                delete prevState[issueCategory];
+            // 'prevState[issueCategory]?.issues as ...' typing is required here to avoid a typescript limitation
+            // "This expression is not callable" caused by filter().
+            // More information can be found here: https://github.com/microsoft/TypeScript/issues/44373
+            const categoryIssues = (
+              prevState[issueCategory]?.issues as (_AudioIssue | _OverallIssue | _ScreenshareIssue | _VideoIssue)[]
+            )?.filter((value: _AudioIssue | _OverallIssue | _ScreenshareIssue | _VideoIssue) => value !== issue);
+            return {
+              ...prevState,
+              [issueCategory]: {
+                ...(prevState[issueCategory] || {}),
+                issues: categoryIssues
               }
-            }
-            return prevState;
+            };
           });
         } else {
+          setCheckedTextFields(checkedTextFields.filter((id) => id !== issueCategory));
           setSelectedTextResponse((prevState) => {
             delete prevState[issueCategory];
             return prevState;
           });
         }
       }
-
-      if (onConfirm) {
-        onConfirm(selectedTags, selectedTextResponse);
-      }
     },
-    [onConfirm, selectedTags, selectedTextResponse, textResponse]
+    [textResponse, checkedTextFields]
   );
 
   const theme = useTheme();
 
   const onRenderLabel = useCallback(
-    (issueCategory) => {
+    (issueCategory: _IssueCategory) => {
       return (
         <TextField
           key={issueCategory}
@@ -173,15 +198,14 @@ export const _TagsSurvey = (props: _TagsSurveyProps): JSX.Element => {
           placeholder={strings?.tagsSurveyTextFieldDefaultText}
           onChange={(e, v) => {
             if (v) {
+              setCheckedTextFields([...checkedTextFields, issueCategory]);
               setTextResponse((prevState) => {
                 prevState[issueCategory] = v;
                 return prevState;
               });
 
               setSelectedTextResponse((prevState) => {
-                if (Object.keys(prevState).includes(issueCategory)) {
-                  prevState[issueCategory] = v;
-                }
+                prevState[issueCategory] = v;
                 return prevState;
               });
             }
@@ -189,8 +213,14 @@ export const _TagsSurvey = (props: _TagsSurveyProps): JSX.Element => {
         />
       );
     },
-    [strings?.tagsSurveyTextFieldDefaultText]
+    [strings?.tagsSurveyTextFieldDefaultText, checkedTextFields]
   );
+
+  useEffect(() => {
+    if (onConfirm) {
+      onConfirm(selectedTags, selectedTextResponse);
+    }
+  }, [selectedTags, selectedTextResponse, onConfirm]);
 
   return (
     <>
@@ -199,11 +229,11 @@ export const _TagsSurvey = (props: _TagsSurveyProps): JSX.Element => {
       </Stack>
 
       <Pivot>
-        {Object.keys(tags).map((key, i) => {
+        {_getKeys(tags).map((key, i) => {
           return (
             <PivotItem
               key={`key-${i}`}
-              headerText={categoryHeadings[key]}
+              headerText={categoryHeadings[key]} // Add index signature to allow indexing with a string
               headerButtonProps={{
                 'data-order': i,
                 'data-title': key
@@ -222,6 +252,7 @@ export const _TagsSurvey = (props: _TagsSurveyProps): JSX.Element => {
               })}
               {showFreeFormTextField && (
                 <Checkbox
+                  checked={checkedTextFields.includes(key)}
                   styles={freeFormTextCheckboxStyles}
                   onChange={(ev, checked) => onChange(key, checked ?? false)}
                   onRenderLabel={() => {

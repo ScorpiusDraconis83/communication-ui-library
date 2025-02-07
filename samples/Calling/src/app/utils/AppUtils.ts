@@ -2,10 +2,9 @@
 // Licensed under the MIT License.
 
 import { GroupLocator, TeamsMeetingLinkLocator } from '@azure/communication-calling';
-/* @conditional-compile-remove(rooms) */
-import { RoomLocator, ParticipantRole } from '@azure/communication-calling';
-/* @conditional-compile-remove(teams-adhoc-call) */ /* @conditional-compile-remove(PSTN-calls) */
-import { CallParticipantsLocator } from '@azure/communication-react';
+import { ParticipantRole, RoomCallLocator } from '@azure/communication-calling';
+import { TeamsMeetingIdLocator } from '@azure/communication-calling';
+import { fromFlatCommunicationIdentifier, StartCallIdentifier } from '@azure/communication-react';
 import { v1 as generateGUID } from 'uuid';
 
 /**
@@ -13,7 +12,7 @@ import { v1 as generateGUID } from 'uuid';
  */
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 export const fetchTokenResponse = async (): Promise<any> => {
-  const response = await fetch('/token?scope=voip');
+  const response = await fetch('token?scope=voip');
   if (response.ok) {
     const responseAsJson = await response.json(); //(await response.json())?.value?.token;
     const token = responseAsJson.token;
@@ -41,7 +40,6 @@ export const getGroupIdFromUrl = (): GroupLocator | undefined => {
 
 export const createGroupId = (): GroupLocator => ({ groupId: generateGUID() });
 
-/* @conditional-compile-remove(rooms) */
 /**
  * Create an ACS room
  */
@@ -49,7 +47,7 @@ export const createRoom = async (): Promise<string> => {
   const requestOptions = {
     method: 'POST'
   };
-  const response = await fetch(`/createRoom`, requestOptions);
+  const response = await fetch(`createRoom`, requestOptions);
   if (!response.ok) {
     throw 'Unable to create room';
   }
@@ -58,7 +56,6 @@ export const createRoom = async (): Promise<string> => {
   return body['id'];
 };
 
-/* @conditional-compile-remove(rooms) */
 /**
  * Add user to an ACS room with a given roomId and role
  */
@@ -70,7 +67,7 @@ export const addUserToRoom = async (userId: string, roomId: string, role: Partic
     },
     body: JSON.stringify({ userId: userId, roomId: roomId, role: role })
   };
-  const response = await fetch('/addUserToRoom', requestOptions);
+  const response = await fetch('addUserToRoom', requestOptions);
   if (!response.ok) {
     throw 'Unable to add user to room';
   }
@@ -85,7 +82,16 @@ export const getTeamsLinkFromUrl = (): TeamsMeetingLinkLocator | undefined => {
   return teamsLink ? { meetingLink: teamsLink } : undefined;
 };
 
-/* @conditional-compile-remove(teams-identity-support) */
+/**
+ * Get teams meeting id and passcode from the url's query params.
+ */
+export const getMeetingIdFromUrl = (): TeamsMeetingIdLocator | undefined => {
+  const urlParams = new URLSearchParams(window.location.search);
+  const meetingId = urlParams.get('meetingId');
+  const passcode = urlParams.get('passcode');
+  return meetingId ? { meetingId: meetingId, passcode: passcode ? passcode : undefined } : undefined;
+};
+
 /**
  * Get teams meeting link from the url's query params.
  */
@@ -94,21 +100,22 @@ export const getIsCTE = (): boolean | undefined => {
   return urlParams.get('isCTE') === 'true';
 };
 
-/* @conditional-compile-remove(rooms) */
 /**
  * Get room id from the url's query params.
  */
-export const getRoomIdFromUrl = (): RoomLocator | undefined => {
+export const getRoomIdFromUrl = (): RoomCallLocator | undefined => {
   const urlParams = new URLSearchParams(window.location.search);
   const roomId = urlParams.get('roomId');
   return roomId ? { roomId } : undefined;
 };
 
-/* @conditional-compile-remove(PSTN-calls) */ /* @conditional-compile-remove(one-to-n-calling)  */
-export const getOutboundParticipants = (outboundParticipants?: string[]): CallParticipantsLocator | undefined => {
+export const getOutboundParticipants = (outboundParticipants?: string[]): StartCallIdentifier[] | undefined => {
   if (outboundParticipants && outboundParticipants.length > 0) {
+    const participants: StartCallIdentifier[] = outboundParticipants.map((participantId) => {
+      return fromFlatCommunicationIdentifier(participantId);
+    });
     // set call participants and do not update the window URL since there is not a joinable link
-    return { participantIds: outboundParticipants };
+    return participants;
   }
   return undefined;
 };
@@ -127,7 +134,7 @@ export const isOnIphoneAndNotSafari = (): boolean => {
 export const isLandscape = (): boolean => window.innerWidth < window.innerHeight;
 
 export const navigateToHomePage = (): void => {
-  window.location.href = window.location.href.split('?')[0];
+  window.location.href = window.location.href.split('?')[0] ?? window.location.href;
 };
 
 export const WEB_APP_TITLE = document.title;
@@ -140,3 +147,6 @@ export const callingSDKVersion = __CALLINGVERSION__;
 
 declare let __COMMUNICATIONREACTVERSION__: string; //Injected by webpack
 export const communicationReactSDKVersion = __COMMUNICATIONREACTVERSION__;
+
+declare let __COMMITID__: string; //Injected by webpack
+export const commitID = __COMMITID__;

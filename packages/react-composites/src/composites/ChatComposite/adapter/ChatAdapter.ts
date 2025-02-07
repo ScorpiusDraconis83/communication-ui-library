@@ -2,16 +2,13 @@
 // Licensed under the MIT License.
 
 import type { ChatMessage, ChatParticipant, SendMessageOptions } from '@azure/communication-chat';
+/* @conditional-compile-remove(rich-text-editor-image-upload) */
+import type { UploadChatImageResult } from '@internal/acs-ui-common';
 import type { CommunicationIdentifierKind, CommunicationUserKind } from '@azure/communication-common';
 import { ChatThreadClientState } from '@internal/chat-stateful-client';
 import type { AdapterError, AdapterErrors, AdapterState, Disposable } from '../../common/adapters';
-/* @conditional-compile-remove(file-sharing) */
-import { FileUploadAdapter } from './AzureCommunicationFileUploadAdapter';
-/* @conditional-compile-remove(file-sharing) */
-import { FileUploadsUiState } from './AzureCommunicationFileUploadAdapter';
-import { AttachmentDownloadResult } from '@internal/react-components';
-/* @conditional-compile-remove(file-sharing) */
-import { AttachmentMetadata } from '@internal/react-components';
+/* @conditional-compile-remove(file-sharing-acs) */
+import { MessageOptions } from '@internal/acs-ui-common';
 
 /**
  * {@link ChatAdapter} state for pure UI purposes.
@@ -22,14 +19,6 @@ export type ChatAdapterUiState = {
   // FIXME(Delete?)
   // Self-contained state for composite
   error?: Error;
-  /* @conditional-compile-remove(file-sharing) */
-  /**
-   * Files being uploaded by a user in the current thread.
-   * Should be set to null once the upload is complete.
-   * Array of type {@link FileUploadsUiState}
-   * @beta
-   */
-  fileUploads?: FileUploadsUiState;
 };
 
 /**
@@ -68,8 +57,22 @@ export interface ChatAdapterThreadManagement {
   fetchInitialData(): Promise<void>;
   /**
    * Send a message in the thread.
+   * Please note that SendMessageOptions is being deprecated, please use MessageOptions instead.
    */
-  sendMessage(content: string, options?: SendMessageOptions): Promise<void>;
+  sendMessage(
+    content: string,
+    options?: SendMessageOptions | /* @conditional-compile-remove(file-sharing-acs) */ MessageOptions
+  ): Promise<void>;
+  /* @conditional-compile-remove(rich-text-editor-image-upload) */
+  /**
+   * Upload an inline image for a message.
+   */
+  uploadImage(image: Blob, imageFilename: string): Promise<UploadChatImageResult>;
+  /* @conditional-compile-remove(rich-text-editor-image-upload) */
+  /**
+   * Delete an inline image for a message.
+   */
+  deleteImage(imageId: string): Promise<void>;
   /**
    * Send a read receipt for a message.
    */
@@ -88,15 +91,12 @@ export interface ChatAdapterThreadManagement {
   setTopic(topicName: string): Promise<void>;
   /**
    * Update a message content.
+   * Please note that metadata is being deprecated, please use MessageOptions.metadata instead.
    */
   updateMessage(
     messageId: string,
     content: string,
-    metadata?: Record<string, string>,
-    /* @conditional-compile-remove(file-sharing) */
-    options?: {
-      attachmentMetadata?: AttachmentMetadata[];
-    }
+    options?: Record<string, string> | /* @conditional-compile-remove(file-sharing-acs) */ MessageOptions
   ): Promise<void>;
   /**
    * Delete a message in the thread.
@@ -110,8 +110,25 @@ export interface ChatAdapterThreadManagement {
    *
    */
   loadPreviousChatMessages(messagesToLoad: number): Promise<boolean>;
-  downloadAttachments: (options: { attachmentUrls: Record<string, string> }) => Promise<AttachmentDownloadResult[]>;
+  /**
+   * Downloads a resource into the cache for the given message.
+   */
+  downloadResourceToCache(resourceDetails: ResourceDetails): Promise<void>;
+  /**
+   * Removes a resource from the cache for the given message.
+   */
+  removeResourceFromCache(resourceDetails: ResourceDetails): void;
 }
+/**
+ * Details required for download a resource to cache.
+ *
+ * @public
+ */
+export type ResourceDetails = {
+  threadId: string;
+  messageId: string;
+  resourceUrl: string;
+};
 
 /**
  * Chat composite events that can be subscribed to.
@@ -202,9 +219,7 @@ export interface ChatAdapterSubscribers {
 export type ChatAdapter = ChatAdapterThreadManagement &
   AdapterState<ChatAdapterState> &
   Disposable &
-  ChatAdapterSubscribers &
-  /* @conditional-compile-remove(file-sharing) */
-  FileUploadAdapter;
+  ChatAdapterSubscribers;
 
 /**
  * Callback for {@link ChatAdapterSubscribers} 'messageReceived' event.

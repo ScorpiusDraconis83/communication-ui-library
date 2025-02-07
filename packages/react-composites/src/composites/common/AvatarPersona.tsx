@@ -3,7 +3,6 @@
 
 import { IPersonaProps, Persona, PersonaInitialsColor } from '@fluentui/react';
 import React, { useEffect, useState } from 'react';
-/* @conditional-compile-remove(raise-hand) */
 import { mergeStyles } from '@fluentui/react';
 
 /**
@@ -35,7 +34,6 @@ export type AvatarPersonaData = {
    * @defaultvalue `white`
    */
   initialsTextColor?: string;
-  /* @conditional-compile-remove(PSTN-calls) */ /* @conditional-compile-remove(one-to-n-calling) */
   /**
    * If true, show the special coin for unknown persona.
    * It has '?' in place of initials, with static font and background colors
@@ -65,7 +63,7 @@ export interface AvatarPersonaProps extends IPersonaProps {
   /**
    * Allow to show colored border around persona coin, but isActive is what shows it.
    */
-  /* @conditional-compile-remove(raise-hand) */
+
   allowActiveBorder?: boolean;
 }
 
@@ -93,9 +91,8 @@ export const AvatarPersona = (props: AvatarPersonaProps): JSX.Element => {
     })();
   }, [data, dataProvider, userId]);
 
-  /* @conditional-compile-remove(raise-hand) */
   let activePersona = '';
-  /* @conditional-compile-remove(raise-hand) */
+
   if (props.allowActiveBorder) {
     // Display a border for raised handed participants in participant list
     activePersona = mergeStyles({
@@ -113,7 +110,6 @@ export const AvatarPersona = (props: AvatarPersonaProps): JSX.Element => {
   return (
     <Persona
       {...props}
-      /* @conditional-compile-remove(raise-hand) */
       className={activePersona}
       text={data?.text ?? text}
       imageUrl={data?.imageUrl ?? imageUrl}
@@ -122,7 +118,6 @@ export const AvatarPersona = (props: AvatarPersonaProps): JSX.Element => {
       initialsTextColor={data?.initialsTextColor ?? initialsTextColor ?? 'white'}
       // default disable tooltip unless specified
       showOverflowTooltip={showOverflowTooltip ?? false}
-      /* @conditional-compile-remove(PSTN-calls) */ /* @conditional-compile-remove(one-to-n-calling) */
       showUnknownPersonaCoin={data?.showUnknownPersonaCoin ?? props.showUnknownPersonaCoin ?? false}
     />
   );

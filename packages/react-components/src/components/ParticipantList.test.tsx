@@ -3,20 +3,12 @@
 
 import React from 'react';
 import { ParticipantList } from './ParticipantList';
-import { registerIcons } from '@fluentui/react';
 import { render } from '@testing-library/react';
 
 // eslint-disable-next-line @typescript-eslint/explicit-function-return-type, @typescript-eslint/no-empty-function
 const dummyOnRemoveParticipantCallback = () => {};
 
 describe('ParticipantList tests for different roles', () => {
-  beforeAll(() => {
-    registerIcons({
-      icons: {
-        participantitemoptions: <></>
-      }
-    });
-  });
   test('ParticipantList should have remove item', async () => {
     render(
       <ParticipantList
@@ -25,7 +17,6 @@ describe('ParticipantList tests for different roles', () => {
       />
     );
   });
-  /* @conditional-compile-remove(rooms) */
   test('ParticipantList should have enabled remove menu item for Presenter role', async () => {
     const { container } = render(
       <ParticipantList
@@ -40,7 +31,6 @@ describe('ParticipantList tests for different roles', () => {
     expect(removeMenuItem.disabled).toBe(false);
   });
 
-  /* @conditional-compile-remove(rooms) */
   test('ParticipantList should have disabled remove menu item for Attendee role', async () => {
     const { container } = render(
       <ParticipantList
@@ -53,7 +43,6 @@ describe('ParticipantList tests for different roles', () => {
     expect(removeMenuItem).toBeFalsy();
   });
 
-  /* @conditional-compile-remove(rooms) */
   test('ParticipantList should have disabled remove menu item for Consumer role', async () => {
     const { container } = render(
       <ParticipantList
@@ -67,7 +56,6 @@ describe('ParticipantList tests for different roles', () => {
   });
 });
 
-/* @conditional-compile-remove(rooms) */
 const getRemoveParticipantButton = (container: HTMLElement): HTMLButtonElement => {
   // RTL renders everything in a div on the body element. Fluent however renders flyouts
   // directly on the body element. So we need to get the parent of the container.
@@ -75,5 +63,4 @@ const getRemoveParticipantButton = (container: HTMLElement): HTMLButtonElement =
   return body?.querySelector('button[data-ui-id="participant-list-remove-participant-button"]') as HTMLButtonElement;
 };
 
-/* @conditional-compile-remove(rooms) */
 const mockMyUser = { userId: '0', displayName: 'me', isRemovable: false };
